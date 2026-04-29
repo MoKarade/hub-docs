@@ -20,11 +20,12 @@
 **Prochaines actions (dans l'ordre) :**
 1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + **CI 100% vert** (hub-frontend #7, hub-core #5, hub-ingest #4)
 2. [x] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets ✅ CODE LIVRÉ (hub-frontend `473aa32`, hub-core déjà poussé)
-3. [x] **Étape 1 Sprint C** — reskinage Google Analytics dark ✅ CODE LIVRÉ (5 commits b857b53→eb95328). Brief design dans `sessions/sprint-c-design-brief.md`.
-4. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
-5. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
-6. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
-7. [ ] **Étapes 5-7** — Santé (Garmin/Google Fit) + Streaming/Gaming + Sécurité+Suppression
+3. [x] **Étape 1 Sprint C** — reskinage Google Analytics dark ✅ CODE LIVRÉ + **TESTÉ LOCALEMENT** (5 commits b857b53→eb95328). Brief design dans `sessions/sprint-c-design-brief.md`. Frontend accessible sur http://localhost:3000.
+4. [ ] **Étape 1 Sprint B+** — SSE realtime + dnd-kit (deferred, fixes mineurs Sprint C d'abord)
+5. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
+6. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
+7. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
+8. [ ] **Étapes 5-7** — Santé (Garmin/Google Fit) + Streaming/Gaming + Sécurité+Suppression
 
 ---
 
@@ -69,6 +70,53 @@
 9. **Marc n'a pas encore le fichier** : on code le parser/pipeline d'abord, Marc fera le download Takeout après. Code prêt à parser dès qu'il dépose le JSON.
 
 **Livrable Phase 2 :** une fois Marc fournit son Takeout, ses 10 ans d'historique de localisation sont en DB, accessibles via `/v1/locations/points` + interrogeables via `/v1/ai/ask` ("où étais-je le X ?").
+
+---
+
+## Session #8 — Testing Sprint C + Frontend Launch (2026-04-29, nouveau PC)
+
+**But :** Lancer le frontend localement sur le nouveau PC (dessin14) et valider que Sprint C (Google Analytics redesign) fonctionne end-to-end.
+
+**Travail effectué :**
+
+1. **Setup npm sur nouveau PC :**
+   - Créé `.env.local` depuis `.env.example` ✅
+   - Problème : `npm install` échoue sur chemins Google Drive (`G:\Mon disque\PERSO & LOISIRS\...`) avec git-bash (corruption de fichiers, espaces dans le chemin). ❌
+   - Solution : copié projet entier vers `C:\HubFrontend` (sans espaces) + `npm install --legacy-peer-deps` réussi ✅
+
+2. **Frontend running :**
+   - `npm run dev` lancé → Next.js 15.5.15 écoute sur http://localhost:3000 ✅
+   - Page d'accueil charge correctement ✅
+   - Navigation sidebar fonctionne ✅
+
+3. **Sprint C validé sur 3 pages :**
+   - **Dashboard** : Dark mode épuré, palette ink-900, icônes lucide-react systématiques, semantic coloring (vert accent), widgets Google Analytics style (KPI strip avec .metric/.metric-label/.metric-delta)
+   - **Finances** : KPI strip avec DÉBITS rouge (data-negative), CRÉDITS vert (data-positive), tabs (Banque/CC/Invest), filtres, table transactions en state vide gracieux
+   - **Recherche IA** : Input "Demande à ton hub", conversation histoire, SQL visible par défaut (Sprint C4), error handling élégant (icône AlertCircle, red border subtle)
+
+4. **Known issues (mineurs, déferred) :**
+   - Page `/locations` : erreur client-side (react-leaflet probable incompatibilité, ou dynamique import SSR issue)
+   - Pas de données : hub-core n'est pas en cours (pas de Docker sur ce PC encore). API calls retournent 404/Failed to fetch.
+   - Sidebar collapse button : bouton trouvé mais collapse animation n'est pas visuelle (ou état non persiste UI, à investiguer)
+
+5. **Documentation :**
+   - Sprint C brief était déjà dans `sessions/sprint-c-design-brief.md` ✅
+   - Code déjà pushé (b857b53→eb95328) lors session #7 ✅
+   - Rien à committer aujourd'hui (juste test + documentation)
+
+**Conclusion :**
+Sprint C est **visuellement complète et fonctionnelle** pour le happy path. Le design Google Analytics est validé : dark mode épuré, sémantic coloring, data-dense layout, icônes ubiquitaires, animations subtiles. Prêt pour Sprint B+ (realtime SSE) une fois les fixes mineurs (react-leaflet) sont résolus.
+
+**Blockers résumés :**
+1. npm sur chemin Google Drive = changer le workflow (toujours copier vers C:\ ou symlink)
+2. Hub-core non déployé sur ce PC = pas de vraies données pour tester l'IA/API
+3. Locations page erreur = à debugger (probablement dynamic import react-leaflet + SSR hydration)
+
+**Next steps (quand Marc veut continuer) :**
+- [ ] Docker Desktop setup sur nouveau PC + hub-core container ⟹ données réelles + requêtes IA
+- [ ] Fix react-leaflet page (SSR/dynamic import)
+- [ ] Sprint B+ (SSE realtime + dnd-kit drag-drop)
+- [ ] Persist sidebar collapse state en localStorage (vérifié code existe, check hydration)
 
 ---
 
