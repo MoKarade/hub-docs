@@ -1,0 +1,37 @@
+name: hub-docs CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  markdown-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint markdown
+        uses: DavidAnson/markdownlint-cli2-action@v17
+        with:
+          globs: |
+            *.md
+            decisions/*.md
+            sessions/*.md
+            tutorials/**/*.md
+        continue-on-error: true  # Warning only, pas un échec — la doc évolue souvent
+
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: |
+            --offline
+            --verbose
+            --no-progress
+            --exclude-mail
+            **/*.md
+        continue-on-error: true

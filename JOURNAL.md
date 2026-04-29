@@ -271,3 +271,51 @@
   - Caractères accentués bien décodés (cp1252 → utf-8 → Postgres) : `AccèsD`, `Intérêt sur ET`.
 
 **Fin de session #1.** Phase 0 + Phase 1 Sprints 1 et 2 terminés. À reprendre : Sprint 3 (parser PDF Mastercard, 4 fichiers : janv/fév/mars/avril 2026).
+
+---
+
+### Session #2 — 2026-04-29 (nouveau PC, code-only)
+
+**Contexte** : nouveau PC Windows (`dessin14`), pas l'ancien (`marcr`). Marc a explicitement demandé de **ne rien installer/lancer** localement — uniquement écrire le code qu'il déploiera plus tard sur son vrai PC équipé.
+
+**Mandat** : faire les chunks A, C, D, E (tout sauf B = Phase 3).
+
+**Livrables (62 fichiers, 5 repos)** :
+
+- **A — Docs hub-docs** : `03-data-model.md`, `04-api-contract.md`, `06-security.md`, ADRs 0003 (postgres+pgvector), 0004 (ollama natif), 0005 (cloudflare tunnel vs tailscale), 0006 (age+sops), 0007 (versioning sous-chemin Caddy)
+- **C — Frontend** : pages `/finances` (3 onglets banque/carte/invest + filtres), `/search` (chat IA persistant + SQL/rows collapsibles), `/locations` (carte react-leaflet dynamic SSR-off), home wired sur l'API live (`LiveStatCards` + `SpendingChart` recharts), `lib/api.ts` typed pour les 19 routes, `formatCurrency` defaut CAD/`fr-CA`
+- **D — Tests + outillage** : ~80 tests pytest (4 parsers + 4 endpoints + SQL validator), 5 CI workflows (1/repo), `clone_all.ps1`, `replay.py` (ADR-0002)
+- **E — Infra Phase 0 fin** : `docker-compose.prod.yml` (Postgres pas exposé + Caddy + cloudflared), `cloudflared/README.md` (tunnel + access TOTP), `.sops.yaml` + `init_secrets.ps1` + `decrypt_env.ps1`, vault `secrets/README.md` rewrite, restic backup (3 scripts + README)
+
+**Validation** : reviewer agent indépendant a trouvé **7 vrais bugs**, tous fixés :
+1. `backup.ps1` — `_sendNotif` appelé avant définition + Out-File UTF-16 BOM (cassait le restore psql) → réordonné + `[System.IO.File]::WriteAllText(..., UTF8Encoding $false)`
+2. `app/search/page.tsx` — `useSearchParams()` casse au build Next 15 sans Suspense → wrappé `<SearchPageInner>` dans `<Suspense>`
+3. `tests/test_finance_transactions.py` — comparaison string `"100.00"` casse sur SQLite (renvoie `"100"`) → `Decimal(body["debit"]) == Decimal("100.00")`
+4. `docker-compose.prod.yml` — réseau implicite → ajout explicite `networks: default: name: hub_prod`
+5. `hub-deploy CI` — `python` pas dispo sur Ubuntu runner → `python3` + `setup-python@v5`
+6. `backup.ps1` — `--exclude '*.yaml'` excluait aussi les `.enc.yaml` (perte des secrets dans le snapshot) → `--exclude-file` ciblé `*.tmp + backup/staging`
+7. `app/finances/page.tsx` — date filters envoyés à un endpoint qui ne les accepte pas → filtre côté client uniquement, commenté
+
+**Documentation** : `sessions/2026-04-29_session2_summary.md` (récap détaillé) + `sessions/SUITE.md` (roadmap des prochaines étapes : reprise PC équipé → Phase 0 fin → Phase 2 fin → Phase 3 → Phase 4+ → Phase 5).
+
+**Preview frontend** : 4 fichiers HTML statiques dans `_previews/` (Tailwind CDN + lucide SVG inline) reproduisent fidèlement le rendu des 4 pages. Marc peut ouvrir depuis Google Drive sans aucune install.
+
+**Cleanup PC** : 3 fichiers locaux à `C:\Users\dessin14\.claude\` ont été supprimés en fin de session (cf. demande Marc « rien sur ce PC »). Le code projet sur Google Drive (`G:\Mon disque\...`) reste — c'est syncé partout, pas spécifique au PC.
+
+**Fin de session #2.** Code complet pour Phases 0-2. À reprendre : redéployer sur le vrai PC + Phase 0 fin réelle (tunnel + backup) + import Takeout pour finaliser Phase 2.
+
+---
+
+#### Demande de fin Session #2 — Marc redesign brief
+
+**Verbatim Marc** : *« le front end est trop... IA, je veux que ce soit plus beau plus interactif et moins statique, je veux aussi plus de data genre la santé, mes réseaux, et tout ce que tu peux imaginer... aussi genre la sécurité de mes données, qc ou voir que mes données sur le web sont safe ou nulle part »*
+
+3 chantiers nouveaux à prioriser pour les prochaines sessions :
+1. **Refonte UI** — moins « AI-générique », plus beau, plus interactif. Le 2ᵉ feedback design Marc — la palette ink + vert n'est toujours pas assez distinctive.
+2. **Élargir les sources** — santé (Apple Health, Garmin?), réseaux (Spotify, YouTube, Twitter…), gaming, lecture, browser history.
+3. **Module sécurité OSINT** — check breach (HIBP), footprint web, inventaire de comptes, score d'exposition.
+
+Brief complet + 16 questions ouvertes à Marc : [`sessions/2026-04-29_marc_redesign_request.md`](sessions/2026-04-29_marc_redesign_request.md).
+Roadmap mise à jour : [`sessions/SUITE.md`](sessions/SUITE.md) (Étape 0 = discovery UI ; Étape 1 = refonte ; Étape 5 = santé/réseaux/sécu).
+
+À traiter en début de Session #3.
