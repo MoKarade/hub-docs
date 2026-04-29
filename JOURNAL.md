@@ -10,7 +10,25 @@
 
 ## Plan en cours
 
-### Phase actuelle : **Phase 2 — Localisation Google Maps Timeline**
+### Phase actuelle : **Étape 1 — Refonte UI + nouvelles sources de data**
+
+> Contexte : Session #2 (2026-04-29) a terminé A+C+D+E (62 fichiers, 5 repos). Marc a demandé un redesign UI majeur + élargissement du scope (santé, streaming, sécurité). Les 16 questions de discovery ont été posées et **répondues le 2026-04-29**.
+>
+> Les décisions sont verrouillées : voir `sessions/2026-04-29_marc_answers_discovery.md`.
+> Le plan complet est dans `sessions/SUITE.md`.
+
+**Prochaines actions (dans l'ordre) :**
+1. [ ] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` (drag-drop + persistance)
+2. [ ] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets
+3. [ ] **Étape 1 Sprint C** — reskinage complet de toutes les pages dans le nouveau layout
+4. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
+5. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
+6. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
+7. [ ] **Étapes 5-7** — Santé (Garmin/Google Fit) + Streaming/Gaming + Sécurité+Suppression
+
+---
+
+### Phase actuelle (archive) : **Phase 2 — Localisation Google Maps Timeline**
 
 #### Sprint 5 — Polish Phase 1 ✅ TERMINÉ
 
@@ -319,3 +337,45 @@ Brief complet + 16 questions ouvertes à Marc : [`sessions/2026-04-29_marc_redes
 Roadmap mise à jour : [`sessions/SUITE.md`](sessions/SUITE.md) (Étape 0 = discovery UI ; Étape 1 = refonte ; Étape 5 = santé/réseaux/sécu).
 
 À traiter en début de Session #3.
+
+---
+
+### Session #3 — 2026-04-29 (réponses discovery + plan verrouillé)
+
+**But :** Recevoir et documenter les réponses aux 16 questions UI/scope. Verrouiller les décisions. Mettre à jour la roadmap.
+
+**Réponses Marc (verbatim + décodage) :** [`sessions/2026-04-29_marc_answers_discovery.md`](sessions/2026-04-29_marc_answers_discovery.md)
+
+#### Décisions verrouillées
+
+| Décision | Valeur |
+|---|---|
+| Palette | Dark-only (garder ink + vert) |
+| Layout | Refonte complète — moins SaaS-grid, plus modulaire/personnel |
+| Photos dans UI | NON |
+| Easter eggs / humour | NON |
+| Animations | Tout (framer-motion) : transitions, stagger, hover lift, realtime pulse |
+| Drag-drop | Oui + plus (resize, pin/unpin, persistance layout) |
+| Realtime | SSE (`GET /v1/events/stream`) |
+| Mode focus | Oui — widget click = expand fullscreen |
+| Santé | Garmin + Google Fit — toutes les métriques disponibles |
+| Streaming | YouTube, YouTube Music, Netflix, Disney+, Prime Video, Crunchyroll |
+| Gaming | Steam + Xbox |
+| Browser/Dev | Chrome history + GitHub |
+| Sécurité | Scope complet (HIBP + footprint + inventaire + data brokers + suppression) |
+| Coût | Tout gratuit — aucune exception |
+| Lecture | NON (Kindle, Pocket, etc.) |
+| Nouveau module | **Module Suppression** — tracker demandes de suppression données en ligne (PIPEDA + Loi 25 QC) |
+
+#### Note importante — Google Drive
+
+Marc a demandé que tout soit sauvegardé sur son Drive. C'est déjà le cas :
+- Le projet vit dans `G:\Mon disque\...` → synchronisé automatiquement sur Google Drive
+- + Tout est pushé sur GitHub (MoKarade) en fin de session
+
+Double sauvegarde à chaque session = zéro risque de perte.
+
+#### Roadmap mise à jour
+
+`sessions/SUITE.md` entièrement mis à jour avec le plan concret pour les étapes 1-10.
+La prochaine session commence par **Étape 1 Sprint A** (système animations + Widget conteneur + LayoutProvider).
