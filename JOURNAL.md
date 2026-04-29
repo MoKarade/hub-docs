@@ -18,7 +18,7 @@
 > Le plan complet est dans `sessions/SUITE.md`.
 
 **Prochaines actions (dans l'ordre) :**
-1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + CI fixé
+1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + **CI 100% vert** (hub-frontend #7, hub-core #5, hub-ingest #4)
 2. [ ] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets
 3. [ ] **Étape 1 Sprint C** — reskinage complet de toutes les pages dans le nouveau layout
 4. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
@@ -417,3 +417,95 @@ Fichiers modifiés : `app/layout.tsx`, `app/page.tsx`, `components/live-stat-car
 - Bug #5 Sprint A : `new Date()` Server Component → `export const dynamic = 'force-dynamic'`
 
 **Commits poussés :** e09e904 + 52ce5a7 sur hub-frontend/main.
+
+> **Note :** CI encore partiellement rouge après Session #4 (run #4 = 52ce5a7 échoue encore). La suite du débugging CI se fait en Session #5.
+
+---
+
+### Session #5 — 2026-04-29 (CI 100% vert sur les 3 repos)
+
+**But :** Terminer de corriger tous les runs GitHub Actions en échec. Marc a vu les runs rouges et a demandé de tout passer au vert.
+
+**Résultat :** 3/3 repos verts sur leur dernier commit.
+
+| Repo | Run final | Commit | Statut |
+|---|---|---|---|
+| hub-frontend | #7 | `7f132f6` | ✅ 2m 4s |
+| hub-core | #5 | `8477fcc` | ✅ 28s |
+| hub-ingest | #4 | `2569fd2` | ✅ 41s |
+
+#### Corrections hub-frontend (runs #5, #6, #7)
+
+**Run #5 → fix apostrophe + links internes**
+- `L'endpoint` non échappé dans du texte JSX → `L&apos;endpoint` (`insight-list.tsx:18`)
+- 6 `<a href="/...">` internes → `<Link href="...">` dans `app/page.tsx` (règle `next/core-web-vitals`)
+- Commit : `7be230a`
+
+**Run #6 → retry ECONNRESET npmjs.org**
+- `npm install` échouait aléatoirement avec `ECONNRESET` depuis les runners GitHub (problème réseau transitoire vers le registry npm)
+- Fix : boucle bash 3 tentatives avec `exit 0`/`exit 1` explicites + `fetch-retries 5` dans la config npm
+- Commit : `bc96548`
+
+**Run #7 → comparaison string/number TypeScript**
+- `balance > 0` → TypeScript strict erreur : `balance_after` est sérialisé en `string | null` par FastAPI (PostgreSQL `NUMERIC` → JSON string). Comparaison `string > 0` silencieuse mais fausse
+- Fix : `parseFloat(balance) > 0` dans `components/live-stat-cards.tsx`
+- Commit : `7f132f6` ✅
+
+#### Corrections hub-core (runs #2, #3, #4, #5)
+
+**Run #2 → ruff E501 (lignes longues)**
+- 7 fichiers avec des lignes > 100 caractères → reformattés
+- Commit : `d1ec3d0`
+
+**Run #3 → ruff B008 + bugs _validate_sql + ruff UP043/N806/I001**
+- `B008` : 25 violations FastAPI légitimes (`Query(...)`, `Depends(...)` comme default args) → `ignore = ["B008"]`
+- `I001` : ruff traitait `src` comme third-party → `known-first-party = ["src"]`
+- `UP043` : `AsyncGenerator[X, None]` → `AsyncGenerator[X]` dans `session.py` et `conftest.py`
+- `N806` : `SessionLocal` (PascalCase dans une fonction) → renommé `session_factory` + `ignore = ["N806"]`
+- **Bug _validate_sql #1** : `WITH recent AS (...) SELECT * FROM recent` → erreur "table non autorisée: recent" — les CTEs n'étaient pas extraits. Fix : extraction des noms CTE via `re.finditer(r"\bWITH\s+(\w+)\s+AS\b")` + union dans `allowed`
+- **Bug _validate_sql #2** : `INSERT INTO foo` levait "doit commencer par SELECT" au lieu de "mot-clé interdit". Fix : check forbidden keywords EN PREMIER, avant le check SELECT/WITH
+- Commit : `c2ac9fe`
+
+**Run #4 → ruff format --check**
+- 6 fichiers hub-core non conformes au formatter ruff → `ruff format` appliqué localement (Python 3.14 + ruff installés sur la machine)
+- Commit : `b9c6f14`
+
+**Run #5 → tests qui testaient l'ancien comportement buggy**
+- Après le fix d'ordre des checks, `UPDATE accounts SET nickname = 'x'` et `VACUUM` (qui sont dans la liste des mots-clés interdits) levaient désormais "interdit" au lieu de "SELECT" → 2 tests de `TestInvalidNonSelect` cassaient
+- Fix : tests mis à jour avec `SET search_path = public` et `pg_sleep(1)` — des SQL non-SELECT qui ne sont PAS dans la liste interdite
+- Commit : `8477fcc` ✅
+
+#### Corrections hub-ingest (runs #2, #3, #4)
+
+**Run #2 → ruff E741 + E501 + datetime.utcnow**
+- `E741` : variable `l` ambiguë dans 3 list comprehensions de `disnat_pdf.py` → renommée `line`
+- `E501` : lignes longues reformattées
+- `datetime.utcnow()` déprécié Python 3.12+ dans `connectors/base.py` → `datetime.now(UTC)`
+- Commit : `1083645`
+
+**Run #3 → ruff format --check**
+- 7 fichiers non conformes : `disnat_pdf.py`, `disnat.py`, `mastercard.py`, `dump_pdf_tables.py`, `replay.py`, `test_disnat_pdf.py`, `test_google_takeout_timeline.py`
+- `ruff format` appliqué localement
+- Commit : `db03081`
+
+**Run #4 → fixture CSV date format**
+- `tests/fixtures/desjardins_minimal.csv` utilisait `2026-01-01` (tirets) mais `_parse_date()` fait `raw.split("/")` et attend des slashes (`YYYY/MM/DD` = format réel Desjardins)
+- Toutes les lignes du CSV levaient `ValueError` silencieusement attrapée → 0 lignes parsées → 5 tests `IndexError` (`test_parses_all_valid_rows`, `test_eop_debit_row`, `test_eop_credit_row`, `test_accents_decoded_via_cp1252`, `test_savings_row_separated`)
+- Fix : dates corrigées en `2026/01/01` dans le fixture
+- Commit : `2569fd2` ✅
+
+#### Bugs réels corrigés (impact prod, pas seulement CI)
+
+1. **`_validate_sql` CTE** : les requêtes `WITH xxx AS (...) SELECT * FROM xxx` étaient rejetées en prod avec "table non autorisée: xxx". Correctement réparé.
+2. **`_validate_sql` ordre** : `INSERT INTO ...` levait le mauvais message d'erreur en prod ("doit commencer par SELECT" au lieu de "mot-clé interdit"). Réparé.
+3. **`balance > 0` TypeScript** : comparaison silencieuse string/number dans le dashboard → résultat toujours faux si balance = chaîne positive. Réparé.
+
+#### Audit qualité annexe (4 agents parallèles)
+
+En parallèle du debug CI, 4 agents d'audit ont scanné les 3 repos pour trouver d'autres bugs potentiels. Résultat : les bugs ci-dessus + confirmation que le reste du code est sain.
+
+**Commits de cette session (hub-frontend) :** `7be230a`, `bc96548`, `7f132f6`
+**Commits de cette session (hub-core) :** `d1ec3d0`, `c2ac9fe`, `b9c6f14`, `8477fcc`
+**Commits de cette session (hub-ingest) :** `1083645`, `db03081`, `2569fd2`
+
+**Fin de session #5.** Tout vert. Prochaine étape : Sprint B (SSE realtime + drag-drop + focus mode).
