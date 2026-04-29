@@ -20,7 +20,7 @@
 **Prochaines actions (dans l'ordre) :**
 1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + **CI 100% vert** (hub-frontend #7, hub-core #5, hub-ingest #4)
 2. [x] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets ✅ CODE LIVRÉ (hub-frontend `473aa32`, hub-core déjà poussé)
-3. [ ] **Étape 1 Sprint C** — reskinage complet de toutes les pages dans le nouveau layout
+3. [x] **Étape 1 Sprint C** — reskinage Google Analytics dark ✅ CODE LIVRÉ (5 commits b857b53→eb95328). Brief design dans `sessions/sprint-c-design-brief.md`.
 4. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
 5. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
 6. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
@@ -558,3 +558,92 @@ En parallèle du debug CI, 4 agents d'audit ont scanné les 3 repos pour trouver
 - **`getSortedIds` + `reorder`** : l'ordre de tri est toujours recalculé côté `LayoutContext`, pas dupliqué dans `WidgetGrid`.
 
 **Fin de session #6.** Sprint B livré. Prochaine étape : Sprint C (reskinage de toutes les pages dans le nouveau layout).
+
+---
+
+### Session #7 — 2026-04-29 (Sprint C livré — refonte UI Google Analytics dark)
+
+**Contexte :** Marc a vu le mockup Sprint A et a dit "il faut beaucoup retravailler le frontend". Discovery session de 18 questions/réponses → brief design détaillé sauvegardé dans `sessions/sprint-c-design-brief.md`.
+
+**Direction visuelle verrouillée :**
+- Style Google Analytics dark mode (data-dense mais chirurgical)
+- Plus épuré, hiérarchie typographique forte
+- Vert `#5cdb95` UNIQUEMENT pour valeurs positives, plus blanc/neutre par défaut (Marc : "trop crypto bro")
+- Sidebar collapsible (icône+texte ↔ icône seule)
+- Mobile + desktop responsive
+- Progressive disclosure : épuré en surface, riche en profondeur
+
+**Sprint C livré en 5 sous-sprints :**
+
+| Sous-sprint | Commit | Description |
+|---|---|---|
+| C1 — Fondations | `b857b53` | Palette `data` Tailwind + utilitaires CSS GA + sidebar collapsible |
+| C2 — Dashboard | `da45084` | KPI strip prominent + RecentTransactions + layout 3-col |
+| C3 — Finances | `6dfc430` | SummaryRow GA-style + couleurs sémantiques `data-positive`/`data-negative` |
+| C4 — Search | `eb95328` | SQL généré visible par défaut (plus dans `<details>` fermé) |
+| C5 — Locations | `eb95328` | StatTile GA-style |
+
+#### C1 — Fondations design (commit `b857b53`)
+
+- **`tailwind.config.ts`** : ajout namespace `data` (`positive` `#34a853`, `negative` `#ea4335`, `neutral` `#e6ecf2`, `muted` `#8b95a3`). Vert/rouge Google moins saturés que l'ancien accent.
+- **`globals.css`** : retrait des gradients `radial-gradient` du body (trop "designer", GA est plat). Ajout utilitaires `.metric` `.metric-lg` `.metric-label` `.metric-delta` `.ga-card` `.ga-card-hover` `.section-title` + classes data sémantiques.
+- **`sidebar.tsx`** : refonte collapsible avec `localStorage('hub-sidebar-collapsed-v1')`. Mode étendu (264 px, icône+label+sections titrées) ↔ mode réduit (60 px, icône seule, tooltip Radix au hover, séparateur subtil entre sections). Toggle en bas avec `PanelLeftClose`/`PanelLeftOpen` icons.
+
+#### C2 — Dashboard rework (commit `da45084`)
+
+- **`live-stat-cards.tsx`** : KPI strip refondu Google Analytics. Plus de vert sur valeurs neutres — vert UNIQUEMENT si solde positif (sémantique). Hiérarchie typo forte (`.metric-lg` + `.metric-label`). Bordures subtiles (`.ga-card`). Stagger animation conservé, retrait du `whileHover` lift.
+- **`recent-transactions.tsx`** (NOUVEAU) : table compacte mergeant transactions de compte courant + carte de crédit, triées par date desc. Ligne par transaction avec icône direction (`ArrowDownLeft` crédit / `ArrowUpRight` débit), date MM-DD compacte, description tronquée, montant aligné à droite avec couleur sémantique (`data-positive` si crédit). Skeleton loader si pas de data. `noPadding` pour pleine largeur.
+- **`dashboard-grid.tsx`** : nouveau layout 5-rows :
+  - Row 1 : KPI strip (full, hors WidgetGrid pour prominence GA)
+  - Row 2 : ai-search (full)
+  - Row 3 : spending-chart (lg=2col) + insights (sm=1col)
+  - Row 4 : recent-transactions (lg=2col) + locations (sm=1col)
+  - Row 5 : health (full)
+  - Row 6 : apps (full)
+  - Pulse SSE migré du finances widget vers recent-transactions (plus pertinent).
+
+#### C3 — Finances semantic colors (commit `6dfc430`)
+
+- `SummaryRow` refonte GA : `.ga-card` + `.metric` + `.metric-label`.
+- 5 emplacements convertis : SummaryRow banking + CC, table banking amount cell, table CC amount cell, table investments amount cell. `text-accent`/`text-danger` → `data-positive`/`data-negative` sémantiques.
+
+#### C4 — Search SQL visible (commit `eb95328`)
+
+- Le bloc SQL généré était dans `<details>` fermé. Maintenant en `.ga-card` ouvert par défaut, header `.metric-label` avec icône Code2.
+- Le résultat brut reste collapsable (verbeux, optionnel).
+- Retrait du gradient `bg-gradient-to-br` du panel input → simple `.ga-card`.
+- `ai-search-card` : retrait du gradient designer + ring-accent du panel d'autour.
+
+#### C5 — Locations GA-style (commit `eb95328`)
+
+- `StatTile` refonte : `.ga-card` + `.metric` + `.metric-label`.
+- "Marche" passe de `text-accent` → `data-positive` (sémantique : activité saine).
+- Heatmap différée (nécessite `leaflet.heat` plugin, hors scope C5 minimal).
+
+#### Fichiers touchés en Sprint C
+
+```
+hub-frontend/
+├── app/
+│   ├── finances/page.tsx       (C3)
+│   ├── locations/page.tsx      (C5)
+│   ├── search/page.tsx         (C4)
+│   └── globals.css             (C1)
+├── components/
+│   ├── ai-search-card.tsx      (C4)
+│   ├── dashboard-grid.tsx      (C2)
+│   ├── live-stat-cards.tsx     (C2)
+│   ├── recent-transactions.tsx (C2 — NOUVEAU)
+│   └── sidebar.tsx             (C1)
+└── tailwind.config.ts          (C1)
+```
+
+#### Reste à faire (post-Sprint C)
+
+- Mobile responsive (sidebar hamburger)
+- Heatmap location (leaflet.heat)
+- Donut chart spending breakdown (recharts PieChart) — necessite categorisation NLP des descriptions
+- Mode focus pleine page sur les pages secondaires (actuellement seulement sur les widgets de la home)
+- Insights réels (Phase 4+) — pour l'instant placeholder
+
+**Fin de session #7.** Sprint C livré sur tous les fronts (5/5). Frontend nettement plus Google-Analytics maintenant. Prochaine étape : déploiement réel sur le PC (Étape 2 : Docker + Ollama + GPU) ou ajustements UI selon le retour de Marc en voyant la vraie app tourner.
