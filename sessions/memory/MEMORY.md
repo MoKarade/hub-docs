@@ -1,0 +1,1 @@
+- [Banque et comptes Marc](project_banking.md) — Desjardins uniquement (5 comptes : débit/crédit/épargne/actions CAD/actions USD). Service tiers payant abandonné, no-paid-service.
