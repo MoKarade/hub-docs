@@ -18,7 +18,7 @@
 > Le plan complet est dans `sessions/SUITE.md`.
 
 **Prochaines actions (dans l'ordre) :**
-1. [ ] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` (drag-drop + persistance)
+1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + CI fixé
 2. [ ] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets
 3. [ ] **Étape 1 Sprint C** — reskinage complet de toutes les pages dans le nouveau layout
 4. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
@@ -379,3 +379,41 @@ Double sauvegarde à chaque session = zéro risque de perte.
 
 `sessions/SUITE.md` entièrement mis à jour avec le plan concret pour les étapes 1-10.
 La prochaine session commence par **Étape 1 Sprint A** (système animations + Widget conteneur + LayoutProvider).
+
+---
+
+### Session #4 — 2026-04-29 (Sprint A livré + CI fixé)
+
+**But :** Sprint A UI redesign + corriger les run fails GitHub Actions signalés par Marc.
+
+#### Sprint A — Code livré
+
+Nouveaux fichiers hub-frontend :
+- `lib/motion.ts` — variants framer-motion partagés (fadeIn, stagger, staggerItem, pageTransition, scaleIn)
+- `lib/layout-context.tsx` — LayoutProvider + useLayout hook (taille, pin, visible, ordre, localStorage)
+- `components/widget.tsx` — conteneur universel avec header drag handle, pin, size cycle, focus
+- `components/focus-modal.tsx` — overlay plein écran AnimatePresence
+- `components/providers.tsx` — wrapper client pour AnimatePresence + LayoutProvider
+- `app/template.tsx` — transition de page Next.js App Router
+
+Fichiers modifiés : `app/layout.tsx`, `app/page.tsx`, `components/live-stat-cards.tsx`, `tailwind.config.ts`, `app/globals.css`
+
+#### CI fixes (run fails GitHub Actions)
+
+**Cause racine 1 :** `actions/setup-node` avec `cache: 'npm'` → requiert un `package-lock.json` absent (npm install jamais tourné). Erreur : "Dependencies lock file is not found".
+
+**Cause racine 2 :** `npm ci` → même problème (nécessite le lockfile).
+
+**Cause racine 3 :** `React.ReactNode` et `React.ComponentType` utilisés sans `import React` dans 9 fichiers → erreur TypeScript strict.
+
+**Fixes appliqués :**
+- CI : `cache: 'npm'` supprimé de `actions/setup-node`
+- CI : `npm ci` → `npm install --legacy-peer-deps`
+- CI : `.eslintrc.json` ajouté + `ESLINT_USE_FLAT_CONFIG: 'false'` env var
+- TypeScript : `React.ReactNode/ComponentType` → imports nommés dans 9 fichiers
+- Bug #2 Sprint A : `AnimatePresence` + Fragment → deux `AnimatePresence` séparés
+- Bug #3 Sprint A : race condition localStorage → `hasHydrated` ref
+- Bug #4 Sprint A : `AnimatePresence` absent dans `providers.tsx` → ajouté
+- Bug #5 Sprint A : `new Date()` Server Component → `export const dynamic = 'force-dynamic'`
+
+**Commits poussés :** e09e904 + 52ce5a7 sur hub-frontend/main.
