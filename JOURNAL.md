@@ -19,7 +19,7 @@
 
 **Prochaines actions (dans l'ordre) :**
 1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + **CI 100% vert** (hub-frontend #7, hub-core #5, hub-ingest #4)
-2. [ ] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets
+2. [x] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets ✅ CODE LIVRÉ (hub-frontend `473aa32`, hub-core déjà poussé)
 3. [ ] **Étape 1 Sprint C** — reskinage complet de toutes les pages dans le nouveau layout
 4. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
 5. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
@@ -509,3 +509,52 @@ En parallèle du debug CI, 4 agents d'audit ont scanné les 3 repos pour trouver
 **Commits de cette session (hub-ingest) :** `1083645`, `db03081`, `2569fd2`
 
 **Fin de session #5.** Tout vert. Prochaine étape : Sprint B (SSE realtime + drag-drop + focus mode).
+
+---
+
+### Session #6 — 2026-04-29 (Sprint B livré)
+
+**But :** Implémenter Sprint B — SSE realtime + dnd-kit drag-drop + persistance de l'ordre des widgets.
+
+**Résultat :** Sprint B code-complete et poussé.
+
+| Repo | Commit | Description |
+|---|---|---|
+| hub-frontend | `473aa32` | 7 fichiers (3 nouveaux + 4 modifiés) |
+| hub-core | déjà poussé (session #5) | `events.py` + `finance.py` + `locations.py` modifiés |
+
+#### hub-core (poussé en session #5, activé en Sprint B)
+
+- **`src/api/v1/events.py`** (NOUVEAU) : broadcaster asyncio.Queue. Une Queue par client SSE connecté, heartbeat 30s via `asyncio.TimeoutError`, nettoyage auto des clients déconnectés (`QueueFull` → dead set). `GET /v1/events/stream` retourne `StreamingResponse` avec `media_type=text/event-stream`.
+- **`src/api/v1/finance.py`** : `await broadcast("new_transaction", {...})` après chaque `create_transaction` et `create_credit_card_transaction`.
+- **`src/api/v1/locations.py`** : `await broadcast("new_location", {...})` après chaque `create_location_point`.
+- **`src/api/v1/__init__.py`** : `router.include_router(events.router)` ajouté.
+
+#### hub-frontend (Sprint B)
+
+**Nouveaux fichiers :**
+
+- **`lib/use-event-source.ts`** : hook SSE. Connecte `EventSource` à `GET /v1/events/stream`, écoute les events nommés (`connected`, `new_transaction`, `new_location`, `stats_update`). Reconnexion auto après 5s. `status: SseStatus` exposé. `cancelledRef` pour éviter les setState après démontage.
+
+- **`components/widget-grid.tsx`** : grille sortable dnd-kit. `DndContext` + `SortableContext` (rectSortingStrategy) en 3 colonnes CSS. `SortableItem` : appelle `useSortable({ id })`, applique `CSS.Transform`, injecte `dragListeners` + `dragAttributes` dans le Widget via `React.cloneElement`. Col-span automatique selon `getWidget(id).size` (sm/md=1, lg=2, xl/full=3). PointerSensor avec `distance:8` pour éviter les faux déclenchements au scroll.
+
+- **`components/dashboard-grid.tsx`** : shell client de la home. Utilise `useEventSource(SSE_URL)`, déclenche `pulseFinances=true` pendant 2s sur chaque event `new_transaction`, passe `pulse={pulseFinances}` au widget finances. Contient les 7 widgets (ai-search, finances-overview, insights, spending-chart, locations, health, apps) passés à `WidgetGrid`.
+
+**Fichiers modifiés :**
+
+- **`lib/layout-context.tsx`** : action `REORDER` ajoutée (type + reducer case — réassigne `order` par index). `reorder(ids)` et `getSortedIds(knownIds)` ajoutés au Provider et au context value. `getSortedIds` trie : pinned en premier, puis par `order`.
+
+- **`components/widget.tsx`** : props `dragListeners` et `dragAttributes` ajoutés. GripVertical enveloppé dans un `<span>` qui reçoit les deux spreads + `touch-none` pour mobile.
+
+- **`app/page.tsx`** : simplifié en Server Component pur (salutation + header + `<DashboardGrid />` + `<HubStatus />`). Toute la logique widgets et SSE est déléguée à `dashboard-grid.tsx`.
+
+- **`package.json`** : dépendances dnd-kit ajoutées (`@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`).
+
+#### Design decisions de ce sprint
+
+- **`React.cloneElement`** pour injecter les drag listeners : évite de coupler Widget à dnd-kit directement. Widget reste réutilisable hors contexte drag-drop.
+- **`distance:8` PointerSensor** : seuil minimal pour ne pas activer le drag lors des clics sur les boutons du header.
+- **`DashboardGrid` client component** : isoler le hook SSE (`useEventSource`) de `page.tsx` Server Component, sans perdre les bénéfices SSR du shell.
+- **`getSortedIds` + `reorder`** : l'ordre de tri est toujours recalculé côté `LayoutContext`, pas dupliqué dans `WidgetGrid`.
+
+**Fin de session #6.** Sprint B livré. Prochaine étape : Sprint C (reskinage de toutes les pages dans le nouveau layout).
