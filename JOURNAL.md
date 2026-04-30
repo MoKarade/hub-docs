@@ -22,7 +22,8 @@
 2. [x] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets ✅ CODE LIVRÉ (hub-frontend `473aa32`, hub-core déjà poussé)
 3. [x] **Étape 1 Sprint C** — reskinage Google Analytics dark ✅ CODE LIVRÉ + **TESTÉ LOCALEMENT** (5 commits b857b53→eb95328). Brief design dans `sessions/sprint-c-design-brief.md`. Frontend accessible sur http://localhost:3000.
 4. [x] **Étape 1 Sprint D** — 8 pages stubs (`/emails`, `/photos`, `/calendar`, `/documents`, `/health`, `/insights`, `/settings`, `/system/health`) + mobile responsive (sidebar hamburger) + PWA (manifest + InstallPrompt) ✅ CODE LIVRÉ (`b71044e`)
-5. [ ] **Étape 1 Sprint B+** — SSE realtime + dnd-kit advanced (deferred jusqu'au déploiement)
+5. [x] **Étape 1 Sprint E** — Fix erreurs (`/apps/*` 404) + 404 page custom + scripts `launch-app.ps1` + `install-desktop-app.ps1` (vraie app desktop avec raccourci bureau + menu Démarrer) ✅ LIVRÉ (`83795cb`, `f9f4428`)
+6. [ ] **Étape 1 Sprint B+** — SSE realtime + dnd-kit advanced (deferred jusqu'au déploiement)
 6. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
 6. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
 7. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
@@ -71,6 +72,89 @@
 9. **Marc n'a pas encore le fichier** : on code le parser/pipeline d'abord, Marc fera le download Takeout après. Code prêt à parser dès qu'il dépose le JSON.
 
 **Livrable Phase 2 :** une fois Marc fournit son Takeout, ses 10 ans d'historique de localisation sont en DB, accessibles via `/v1/locations/points` + interrogeables via `/v1/ai/ask` ("où étais-je le X ?").
+
+---
+
+## Session #11 — Fix erreurs + App desktop installable (2026-04-30)
+
+**But :** Marc demande "il y a des erreurs, corrige tout" + "j'aimerais avoir genre un app sur mon pc que je puisse ouvrir et avoir tout, pareil une app sur mon tel".
+
+**Travail effectué :**
+
+### 1. Correction des erreurs ✅
+
+**Bug :** `/apps/trajets` et `/apps/finance` (liens dans la sidebar) → 404 noir générique de Next.js.
+
+**Solutions :**
+- Créé `app/apps/trajets/page.tsx` (ComingSoon Phase 2+, leaflet.heat heatmap)
+- Créé `app/apps/finance/page.tsx` (ComingSoon Phase 2+, recharts avancés)
+- Créé `app/not-found.tsx` (404 design Sprint C avec icône MapPinOff, sidebar préservée, boutons "Retour dashboard" + "Rechercher")
+- Fix lint : apostrophes échappées avec `&apos;` dans 404 page
+
+**Audit complet** : 14 routes valides retournent 200, `/notexisting` retourne 404 custom propre. Build prod passe sans erreur (16 routes au total avec /_not-found et /apps/*).
+
+Commit : [hub-frontend@83795cb](https://github.com/MoKarade/hub-frontend/commit/83795cb)
+
+### 2. App desktop installable ✅
+
+**Stratégie pragmatique** : pas besoin de Tauri ou Electron — Chrome `--app=URL` ouvre déjà une fenêtre standalone.
+
+**`hub-deploy/scripts/launch-app.ps1`** :
+- Démarre Ollama daemon si pas actif
+- Démarre Docker stack (postgres + hub-core) si Docker installé
+- Démarre frontend Next.js (cherche dans `C:\HubFrontend` puis fallback Drive)
+- Ouvre Chrome (ou Edge fallback) en `--app=http://localhost:3000` (vraie fenêtre app, sans barre URL)
+- Fallback gracieux si Docker absent (frontend marche, états d'erreur sur les pages data)
+
+**`hub-deploy/scripts/install-desktop-app.ps1`** :
+- Génère icône `hub-perso.ico` (256x256 gradient vert + lettre H)
+- Crée raccourci `Hub perso.lnk` sur le bureau
+- Crée entrée dans menu Démarrer (`Programs\Hub perso\`)
+- Le raccourci lance launch-app.ps1 en `WindowStyle Hidden`
+
+**Test sur ce PC** : raccourci créé sur OneDrive Bureau (`C:\Users\dessin14\Marc Richard\OneDrive - ROBOVIC\Bureau\Hub perso.lnk`) + entrée menu Démarrer ✅.
+
+### 3. Doc PWA mobile + desktop ✅
+
+**`hub-deploy/docs/INSTALL-AS-APP.md`** :
+- **Option A** : App Desktop Windows (launch-app + install-desktop-app)
+- **Option B** : PWA install (Chrome/Edge "Installer" + iOS/Android "Add to Home Screen")
+- **Option C** : Tauri natif (futur, requiert Rust toolchain)
+- Comparatif des 3 + troubleshooting (icônes, HTTPS, iOS Safari obligatoire)
+
+Le manifest.json + InstallPrompt component (Sprint D) rendent déjà la PWA installable depuis n'importe quel browser supporté.
+
+### 4. Bug PowerShell rencontré (résolu)
+
+**Premier write de install-desktop-app.ps1** : caractères Unicode (`—`, `'`, `é`) faisaient parser-error en PowerShell 5.1 (encodage cp1252 au lieu d'UTF-8).
+
+**Fix** : réécrit en ASCII strict, plus d'em-dashes, plus d'apostrophes courbes. Validation via `[Parser]::ParseFile()` pour confirmer 0 erreurs.
+
+Mêmes erreurs initiales pour launch-app.ps1, fixées de la même façon.
+
+### Commits & push
+
+- [hub-frontend@83795cb](https://github.com/MoKarade/hub-frontend/commit/83795cb) — fix routes /apps/* + 404 custom
+- [hub-deploy@f9f4428](https://github.com/MoKarade/hub-deploy/commit/f9f4428) — launch-app + install-desktop-app + INSTALL-AS-APP.md
+
+### Pour Marc — comment utiliser
+
+**Sur ce PC (test)** :
+1. Double-clique sur "Hub perso" sur ton bureau (déjà installé) → tout démarre + Chrome ouvre l'app
+2. Sans Docker installé, le frontend marche mais affiche "Failed to fetch" sur les pages data (normal)
+
+**Sur l'autre PC (le vrai)** :
+1. Clone les repos
+2. `npm install` dans `hub-frontend` (workaround `C:\HubFrontend` si chemin Drive)
+3. Install Docker Desktop + lancer
+4. `cd hub-deploy && .\scripts\install-desktop-app.ps1` → raccourci bureau + menu Démarrer
+5. Double-clic sur l'icône → l'app démarre tout et s'ouvre comme une vraie app
+
+**Sur ton téléphone (iOS/Android)** :
+1. Connecter au même Wi-Fi (ou setup Cloudflare Tunnel pour accès externe)
+2. Ouvrir `http://<IP-PC>:3000` dans Chrome/Safari
+3. Menu → "Add to Home Screen" / "Installer l'app"
+4. Tap sur l'icône → app fullscreen comme une vraie app
 
 ---
 
