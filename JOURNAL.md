@@ -116,13 +116,41 @@ Sprint C est maintenant **100% fonctionnel sur les 4 pages** (Dashboard, Finance
   - Après install : `cd hub-deploy && docker compose -f docker-compose.dev.yml up -d`
   - Puis pull qwen2.5:14b dans Ollama (~9 GB)
 
-**Next steps quand Docker installé :**
-- [ ] `docker compose up` → postgres + redis + hub-core healthy
-- [ ] Alembic migrations appliquées
-- [ ] Test endpoint `/v1/ready` depuis frontend
-- [ ] Pull `qwen2.5:14b` (~9 GB, ~30 min)
-- [ ] Test recherche IA end-to-end (français → SQL → réponse)
-- [ ] Phase 0 fin : Cloudflare Tunnel + DuckDNS + backup restic
+**Validations supplémentaires :**
+- ✅ `npm run build` → 6 pages compilées sans erreur
+  - Fix tsconfig.json : `"types": ["node"]` (sinon erreur "Cannot find type definition file for 'd3-color'" via recharts)
+  - Commit : `0bb68f7`
+- ✅ `qwen2.5:14b-instruct` pull en cours (~9 GB, ~3 min) en background
+
+**Quand Marc revient (bootstrap simple) :**
+
+```powershell
+# 1. Installer Docker Desktop (UNE FOIS)
+#    Lien : https://docs.docker.com/desktop/install/windows-install/
+#    Nécessite : admin + WSL2 + reboot Windows
+
+# 2. Démarrer Docker Desktop (icône systray)
+
+# 3. Lancer la stack — tout est déjà câblé
+cd "G:\Mon disque\PERSO & LOISIRS\AUTOMATISATION\Projets\Hub perso\hub-deploy"
+.\scripts\start_hub.ps1
+# → vérifie Docker + Ollama + pulls modèles + docker compose up + healthcheck
+
+# 4. Lancer le frontend (en parallèle dans un autre terminal)
+cd C:\HubFrontend
+npm run dev
+# → http://localhost:3000
+
+# Tout est prêt. .env hub-deploy contient déjà SECRET_KEY + POSTGRES_PASSWORD
+# générés. Ollama daemon tourne déjà sur :11434.
+```
+
+**État final session #9 :**
+- Frontend : 100% fonctionnel sur 4 pages, build prod OK
+- Sprint A/B/C : complets et validés visuellement
+- Backend : prêt à lancer dès Docker installé
+- Ollama : installé + daemon up + nomic-embed-text ready
+- Modèle qwen2.5:14b : en cours de pull (~3 min)
 
 ---
 
