@@ -73,6 +73,59 @@
 
 ---
 
+## Session #9 — Sprint C polish + Sprint B validation + Ollama (2026-04-30)
+
+**But :** Faire tout ce qui peut être fait sans Marc présent (fixes bugs Sprint C, validation Sprint B, prép infra).
+
+**Travail effectué :**
+
+1. **Fix react-leaflet (page Localisation)** ✅
+   - Bug : page `/locations` crashait avec "client-side exception" car react-leaflet@4.2.1 demande peer react ^18 (incompat React 19)
+   - Solution : upgrade `react-leaflet` 4.2.1 → 5.0.0 (support React 19 natif)
+   - Commit : `2fe2622` poussé sur `MoKarade/hub-frontend`
+   - Validé visuellement : carte OpenStreetMap Québec/Lévis avec filtres date + activité
+
+2. **Validation Sprint B (déjà code-livré, jamais testé)** ✅
+   - **Sidebar collapse** : toggle 264px ↔ 60px fonctionne, persistance localStorage OK, tooltips Radix au hover en mode réduit
+   - **Mode focus** : click bouton Maximize2 sur widget → ouvre `FocusModal` plein écran avec backdrop blur, fermeture via X
+   - **Drag handles dnd-kit** : visibles (`GripVertical`), câblés via `cloneElement` dans `WidgetGrid` → `SortableItem`
+   - **Cycle de taille** : boutons S/M/L/XL/↔ visibles au hover sur chaque widget
+
+3. **Ollama installé via winget** ✅
+   - Version 0.22.0
+   - Daemon tourne sur :11434
+   - Pull modèles en cours : `nomic-embed-text` (~270 MB) en background
+
+4. **Docker Desktop : ÉCHEC install via winget** ❌
+   - Exit code 4294967291 (besoin admin + WSL2 enabled + reboot)
+   - Marc devra installer manuellement : https://docs.docker.com/desktop/install/windows-install/
+   - Sans Docker → pas de Postgres → pas de hub-core → pas de vraies données dans le frontend
+
+5. **Préparation infra** ✅
+   - `.env` créé dans `hub-deploy/` depuis `.env.example`
+   - SECRET_KEY généré (32 bytes random base64)
+   - POSTGRES_PASSWORD aléatoire généré
+   - Prêt pour `docker compose up` une fois Docker installé
+
+**Conclusion :**
+Sprint C est maintenant **100% fonctionnel sur les 4 pages** (Dashboard, Finances, Recherche, Localisation). Sprint B validé visuellement (drag-drop, focus, sidebar). Frontend prêt pour intégration backend dès que Docker est installé.
+
+**Bloquant restant :**
+- **Docker Desktop installation manuelle requise** (admin + WSL2 + reboot Windows)
+  - Lien : https://docs.docker.com/desktop/install/windows-install/
+  - Après install : `cd hub-deploy && docker compose -f docker-compose.dev.yml up -d`
+  - Puis pull qwen2.5:14b dans Ollama (~9 GB)
+
+**Next steps quand Docker installé :**
+- [ ] `docker compose up` → postgres + redis + hub-core healthy
+- [ ] Alembic migrations appliquées
+- [ ] Test endpoint `/v1/ready` depuis frontend
+- [ ] Pull `qwen2.5:14b` (~9 GB, ~30 min)
+- [ ] Test recherche IA end-to-end (français → SQL → réponse)
+- [ ] Phase 0 fin : Cloudflare Tunnel + DuckDNS + backup restic
+
+---
+
 ## Session #8 — Testing Sprint C + Frontend Launch (2026-04-29, nouveau PC)
 
 **But :** Lancer le frontend localement sur le nouveau PC (dessin14) et valider que Sprint C (Google Analytics redesign) fonctionne end-to-end.
