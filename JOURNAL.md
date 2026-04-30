@@ -21,8 +21,9 @@
 1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + **CI 100% vert** (hub-frontend #7, hub-core #5, hub-ingest #4)
 2. [x] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets ✅ CODE LIVRÉ (hub-frontend `473aa32`, hub-core déjà poussé)
 3. [x] **Étape 1 Sprint C** — reskinage Google Analytics dark ✅ CODE LIVRÉ + **TESTÉ LOCALEMENT** (5 commits b857b53→eb95328). Brief design dans `sessions/sprint-c-design-brief.md`. Frontend accessible sur http://localhost:3000.
-4. [ ] **Étape 1 Sprint B+** — SSE realtime + dnd-kit (deferred, fixes mineurs Sprint C d'abord)
-5. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
+4. [x] **Étape 1 Sprint D** — 8 pages stubs (`/emails`, `/photos`, `/calendar`, `/documents`, `/health`, `/insights`, `/settings`, `/system/health`) + mobile responsive (sidebar hamburger) + PWA (manifest + InstallPrompt) ✅ CODE LIVRÉ (`b71044e`)
+5. [ ] **Étape 1 Sprint B+** — SSE realtime + dnd-kit advanced (deferred jusqu'au déploiement)
+6. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
 6. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
 7. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
 8. [ ] **Étapes 5-7** — Santé (Garmin/Google Fit) + Streaming/Gaming + Sécurité+Suppression
@@ -70,6 +71,124 @@
 9. **Marc n'a pas encore le fichier** : on code le parser/pipeline d'abord, Marc fera le download Takeout après. Code prêt à parser dès qu'il dépose le JSON.
 
 **Livrable Phase 2 :** une fois Marc fournit son Takeout, ses 10 ans d'historique de localisation sont en DB, accessibles via `/v1/locations/points` + interrogeables via `/v1/ai/ask` ("où étais-je le X ?").
+
+---
+
+## Session #10 — Sprint D : Pages stubs + Mobile + PWA (2026-04-30)
+
+**But :** Continuer pendant que Marc setup Docker sur l'autre PC. Faire tout ce qui peut être fait sans data.
+
+**Travail effectué :**
+
+### 1. Pages stubs (8 nouvelles pages) ✅
+
+Composant réutilisable `ComingSoon` créé (`components/coming-soon.tsx`) avec :
+- Icône hero + badge phase + ETA
+- Description + sources prévues + capabilities
+- Footer hint vers JOURNAL.md
+- Style Google Analytics (`.ga-card`, `.metric-label`)
+
+**8 nouvelles pages :**
+
+| Route | Phase | Sources prévues |
+|---|---|---|
+| `/emails` | Phase 3 | Gmail API, OAuth 2.0, IMAP fallback |
+| `/photos` | Phase 3 | Google Photos Takeout, CLIP ViT-B/32, EXIF |
+| `/calendar` | Phase 5 | iCal Google, Apple Calendar, Outlook |
+| `/documents` | Phase 5 | inbox PDFs, pdfplumber, OCR tesseract, classification LLM |
+| `/health` | Phase 5 | Garmin Connect, Apple Health, Google Fit, FIT files |
+| `/insights` | Phase 4+ | Cross-référencement banking + locations + santé + calendar |
+| `/settings` | Phase 1+ | localStorage, Postgres configs, age+sops |
+| `/system/health` | Phase 1 | Live SWR `/v1/ready` (refresh 5s) |
+
+La page `/system/health` est interactive : elle affiche l'état de chaque service (Postgres, Ollama, Hub-core, Redis, Cloudflare Tunnel) avec des dots colorés `data-positive`/`data-negative`/unknown et liste les endpoints API.
+
+### 2. Mobile responsive ✅
+
+**Sidebar :**
+- Hamburger button (icon `Menu`) fixed top-3 left-3 z-40 sur `<lg`
+- Drawer fullscreen overlay z-50 avec backdrop ink-950/70 cliquable
+- Auto-close sur navigation (`pathname` change)
+- Auto-close sur Esc + bouton X interne
+- Lock `body.overflow = hidden` quand ouvert
+- Force `isCollapsed = false` quand `mobileOpen` (UX cohérent)
+- Toggle "Réduire" caché sur mobile (`hidden lg:flex`)
+
+**Layout :**
+- Toutes les pages : `flex-1 px-4 sm:px-6 lg:px-8 pt-16 lg:pt-6 pb-6`
+  - `pt-16` mobile pour laisser place au hamburger button
+- WidgetGrid : `grid-cols-1 sm:grid-cols-2 md:grid-cols-3`
+- WidgetSize cycles adaptés : sm/md = col-1, lg = col-1 sm:col-2, xl/full = col-1 sm:col-2 md:col-3
+- FocusModal déjà responsive (`inset-4 md:inset-8 lg:inset-12`)
+
+### 3. PWA ✅
+
+**Fichiers ajoutés :**
+- `public/icon.svg` — Logo SVG 512x512 (gradient accent vert + boxes lucide)
+- `public/manifest.json` — Manifest complet avec name, short_name, theme_color (#0f1419), background_color (#0a0e14), shortcuts (Recherche, Finances, Localisation), display: standalone
+
+**Layout enrichi (`app/layout.tsx`) :**
+```ts
+export const metadata: Metadata = {
+  manifest: '/manifest.json',
+  applicationName: 'Hub perso',
+  appleWebApp: { capable: true, title: 'Hub perso', statusBarStyle: 'black-translucent' },
+  icons: { icon: '/icon.svg', apple: '/icon.svg', shortcut: '/icon.svg' },
+  formatDetection: { telephone: false },
+}
+export const viewport: Viewport = {
+  themeColor: '#0f1419',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  colorScheme: 'dark',
+}
+```
+
+**InstallPrompt component (`components/install-prompt.tsx`) :**
+- Capture `beforeinstallprompt` event (Chrome/Edge/Brave)
+- Bannière bottom-right avec icône Download, titre, description, boutons Installer/Plus tard/X
+- Snooze 7 jours via `localStorage['hub-install-snooze-until']`
+- Auto-hide si déjà installée (`window.matchMedia('(display-mode: standalone)')`)
+- Auto-hide après install confirmé (`appinstalled` event)
+
+### 4. Build prod validé ✅
+
+```
+Route (app)                   Size      First Load JS
+/                            127 kB     301 kB
+/calendar                    1.55 kB    140 kB
+/documents                   1.56 kB    140 kB
+/emails                      1.61 kB    140 kB
+/finances                    3.64 kB    142 kB
+/health                      1.62 kB    140 kB
+/insights                    1.67 kB    140 kB
+/locations                   3.42 kB    142 kB
+/photos                      1.59 kB    140 kB
+/search                      2.77 kB    141 kB
+/settings                    1.62 kB    140 kB
+/system/health               1.95 kB    141 kB
+```
+
+13 routes au total. Shared bundle 102 kB. Tout statique sauf `/`.
+
+### Commit & push
+
+- **hub-frontend** : `b71044e` — feat(sprint-d): 8 pages stubs + mobile responsive + PWA
+- 19 files changed, 814 insertions(+), 28 deletions(-)
+
+### Bug rencontré (résolu)
+
+Premier test mobile : sidebar prenait tout l'écran (w=1664) avec position static. Cause : Tailwind n'avait pas généré les nouvelles classes `lg:*` car le dev server avait été lancé avant la copie des fichiers à `C:\HubFrontend`. Solution : kill + restart node, Tailwind a regénéré le CSS au boot.
+
+### Next steps
+
+Quand Docker installé chez Marc :
+- Setup hub-core stack (`./scripts/start_hub.ps1`)
+- Tester les vraies données dans le frontend
+- Commencer Phase 1+ : streaming SSE realtime widgets
+- Phase 0 fin : Cloudflare Tunnel + DuckDNS + backup restic
 
 ---
 
