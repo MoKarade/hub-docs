@@ -132,6 +132,31 @@ Le manifest.json + InstallPrompt component (Sprint D) rendent déjà la PWA inst
 
 Mêmes erreurs initiales pour launch-app.ps1, fixées de la même façon.
 
+### 5. Bug launch-app.ps1 v1 (résolu)
+
+Marc a reporté "ça marche pas pour le pc". Diagnostic en lançant manuellement :
+
+```
+[*] Verification frontend...
+  Demarrage frontend depuis C:\HubFrontend...
+  Attente du frontend...
+  (1/30) (2/30) ... (30/30) en attente de http://localhost:3000...
+  [X] Frontend timeout. Verifie les logs.
+```
+
+**Cause** : `Start-Process node "C:\...\next\dist\bin\next" dev` créait un process zombie qui n'écoutait pas. Le fichier `dist/bin/next` n'a pas de shebang Windows, donc node ne sait pas l'exécuter en tant que script.
+
+**Fix** : utiliser le wrapper `.bin\next.cmd` via `cmd.exe /c` :
+```powershell
+Start-Process -FilePath "cmd.exe" `
+  -ArgumentList "/c", "`"$nextCmd`"", "dev" `
+  -WorkingDirectory $frontendDir -WindowStyle Hidden
+```
+
+**Validé** : le frontend démarre maintenant en 4s, Chrome s'ouvre en mode app standalone.
+
+Commit : [hub-deploy@5a24531](https://github.com/MoKarade/hub-deploy/commit/5a24531)
+
 ### Commits & push
 
 - [hub-frontend@83795cb](https://github.com/MoKarade/hub-frontend/commit/83795cb) — fix routes /apps/* + 404 custom
