@@ -1004,3 +1004,104 @@ hub-frontend/
 - Insights réels (Phase 4+) — pour l'instant placeholder
 
 **Fin de session #7.** Sprint C livré sur tous les fronts (5/5). Frontend nettement plus Google-Analytics maintenant. Prochaine étape : déploiement réel sur le PC (Étape 2 : Docker + Ollama + GPU) ou ajustements UI selon le retour de Marc en voyant la vraie app tourner.
+
+---
+
+## Session #12 — App standalone + IA chat + Privacy/OSINT pack (2026-05-01)
+
+**Contexte** : nouveau PC `dessin14`, Docker pas installé. Marc reprend, tout doit "juste marcher". Demandes successives :
+1. Erreur `ERR_CONNECTION_REFUSED` au callback OAuth Google → hub-core down (Docker absent)
+2. HIBP password scan dit "no compromise" mais Marc connaît ses leaks → confusion avec breaches email
+3. "Je veux fiabilité 100% gratuit" pour le scan complet → impossible (HIBP API = $3.95/mo, sinon Mozilla Monitor manuel)
+4. "Trop de texte sur la page entière" → cleanup épuré
+5. URLs data brokers cassées → audit + remplacement par yourdigitalrights.org + justdeleteme.xyz
+6. IA charge dans le vide → 503 Generation LLM
+7. 422 SQL refuse car LLM met `SQL:` en préfixe + envie de mode chat libre
+8. "Je veux 1 icône qui démarre + se ferme automatiquement" → workflow desktop natif
+
+### Livré
+
+#### A. Hub-core natif sans Docker
+
+- Setup uvicorn + SQLite local (vu que Docker absent sur ce PC)
+- Fichier `init_sqlite.py` : crée les tables via `Base.metadata.create_all()` (les modèles utilisent `with_variant` donc compatible SQLite)
+- `.env` adapté : `DATABASE_URL=sqlite+aiosqlite:///./hub.db`, OAuth credentials, secret_key 43 chars
+- ⚠️ DB vide donc les vraies données (470 transactions, locations) sont accessibles seulement via Docker+Postgres
+
+#### B. Fixes IA endpoint `/v1/ai/ask`
+
+| Bug | Cause | Fix |
+|---|---|---|
+| `SET LOCAL statement_timeout` 500 sur SQLite | PostgreSQL-only | Conditionnel : `if dialect_name == "postgresql"` |
+| Timeout 60s trop court | Qwen 14B cold start = 60-120s | Passé à 180s |
+| `Generation LLM echouee :` (msg vide) | `httpx.TimeoutException` a `str()` vide | `f"{type(e).__name__}: {e!r}"` |
+| 422 `SQL: SELECT ...` | Few-shot examples utilisent `SQL:` prefix, le LLM le mimick | Cleanup étendu : `re.sub(r"^(?:SQL\|Q\|Query\|Requete)\s*:\s*", ...)` |
+| 400 UNION ALL cross-schema | LLM essaie de répondre "tout mon data" | System prompt : "INTERDIT UNION/UNION ALL" + instruction de retourner SQL safe si question vague |
+| 400 SQL crash → user voit erreur | Pas de fallback gracieux | `try/except` retourne `AskResponse` avec message clair "essaie une question plus spécifique ou utilise mode Discussion" |
+
+#### C. Nouvel endpoint `/v1/ai/chat`
+
+Discussion libre avec l'IA sans toucher la DB. Body : `{message, history[]}` (10 derniers tours max). Système prompt distinct qui guide l'IA à suggérer le mode "Mes data" si la question concerne des données perso.
+
+UI : nouveau mode "Discussion" dans `/search` (icône `MessagesSquare`), toggle dans le settings bar du footer. L'historique de la conversation active est passé au LLM pour garder le contexte.
+
+#### D. Privacy/OSINT pack 100% gratuit (refonte épurée)
+
+`components/breaches-analysis.tsx` : cross-réf domaines des CSV Google passwords vs HIBP `/api/v3/breaches` (gratuit, pas de clé). Affiche services compromis + types de données exposées + chronologie. ~80% précis (probabiliste).
+
+`components/privacy-osint.tsx` : redesign 100% iconique :
+- 4 tuiles (Mozilla Monitor, PimEyes, Loi 25, OSINT)
+- 2 outils tiers maintenus : `yourdigitalrights.org` (auto-génère email PIPEDA pour any company) + `justdeleteme.xyz` (directory de suppression de comptes)
+- 6 quick opt-outs vérifiés (Spokeo, BeenVerified, Whitepages.com, etc.)
+- Loi 25 panel avec template courriel copiable (1 clic)
+- OSINT tools (SpiderFoot, Holehe, Sherlock) avec commandes copiables
+
+URLs auditées via WebFetch : `Canada411/privacy`, `Whitepages.ca/suppression-info`, `411.ca/contact-us`, `consumer.equifax.ca`, `transunion.ca/contact-us`, `pagesjaunes.ca/aboutus/contactus.html` étaient toutes mortes (404/403/redirect). Remplacées par 2 outils tiers fiables + 6 brokers vérifiés.
+
+#### E. Desktop app workflow
+
+`scripts/install-desktop-app.ps1` : 1 icône bureau "Hub perso" (icône verte avec H, gradient).
+
+`scripts/launch-app.ps1` (réécrit) :
+- Auto-detect hub-core (Docker → fallback uvicorn natif si absent)
+- Auto-sync Drive `G:\` → `C:\HubFrontend` si Drive plus récent (compare timestamps `.tsx`/`.ts`/`.css`)
+- Setup auto au 1er lancement : crée venv hub-core via `uv`, init SQLite
+- Chrome lancé avec `--user-data-dir` dédié (process trackable)
+- `WaitForExit()` sur le process Chrome → cleanup auto à la fermeture (kill uvicorn + node + Docker stack)
+
+`scripts/stop_hub.ps1` : conservé comme script manuel mais plus de raccourci (Marc préfère 1 seule icône). Kill Docker + uvicorn natif + Next.js.
+
+### Bugs UX à corriger plus tard
+
+- OAuth callback Chrome reste bloqué sur la page d'erreur Google (403 access_denied avant test users ajouté). Faudrait page `/oauth/error` qui catch et permet retry sans fermer l'app.
+- Pas d'auto-sync inverse C:\ → Drive (si je touche par erreur les fichiers C:\, ils peuvent être perdus). Solution : tout éditer sur Drive uniquement, le launch script syncs vers C:\.
+
+### Fichiers touchés
+
+```
+hub-core/
+├── src/api/v1/ai.py                 (M, +50 lignes : fix SET LOCAL, prefix strip, prompt UNION, fallback, /chat endpoint)
+└── init_sqlite.py                   (NEW, dev local sans Docker)
+
+hub-frontend/
+├── app/search/page.tsx              (M, mode chat dans search + routing par mode)
+├── app/settings/page.tsx            (M, ajout PrivacyOsintSection)
+├── components/breaches-analysis.tsx (NEW, cross-ref domaines × HIBP /breaches)
+├── components/privacy-osint.tsx     (NEW, redesign épuré)
+├── components/bulk-password-checker.tsx (M, intègre BreachesAnalysis après scan)
+├── lib/api.ts                       (M, +chat method)
+└── lib/search-history.ts            (M, +'chat' SearchMode)
+
+hub-deploy/
+├── scripts/launch-app.ps1           (M, gros : Start-HubCoreNative + Sync-DriveToCache + WaitForExit cleanup)
+├── scripts/stop_hub.ps1             (M, support Docker + uvicorn natif + Next.js)
+└── scripts/install-desktop-app.ps1  (M, 1 seule icône, cleanup legacy Stop)
+```
+
+### Prochaines étapes (priorité décroissante)
+
+1. **Installer Docker Desktop** sur ce PC → relancer la stack Postgres → retrouver les 470 transactions Desjardins + locations
+2. **Page `/oauth/error`** côté frontend pour catch les erreurs Google sans bloquer Chrome
+3. **Holehe + Sherlock backend integration** (hub-ingest) : actuellement instructions CLI manuelles, automatiser via endpoint `/v1/osint/scan`
+4. **Phase 0 fin restant** : DuckDNS + restic backup vers OneDrive
+5. **Sprint UI cleanup global** : la section Connexions Google dans /settings a 9 cartes verbeuses, à trimmer
