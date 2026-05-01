@@ -1170,3 +1170,77 @@ Si une API n'est pas activée, le sync retourne 502 avec message clair côté ba
 - **Health sleep données** : Google Fit Aggregate API ne retourne pas les phases sommeil par bucket — il faudrait `users.sessions.list` séparément. Phase 4+ enhancement.
 - **Photos Phase 3c** : nécessite CLIP embedding model (gros download) pour search sémantique dans les images. Skipped pour l'instant.
 - **Port forwarding routeur** + **Cloudflare Tunnel** : dernière phase quand Marc est chez lui.
+
+---
+
+## Session #14 — Phase 5+6 + UI overhaul + watchdog (2026-05-01)
+
+**Contexte** : Marc itère intensément. Demandes : Calendar comme Google Calendar, Drive folder navigation, Tasks CRUD, Contacts search, Gmail filtres+couleurs, Photos GPS, Streaming hub. Plus de la persistance des bugs "hub-core down".
+
+### Livré
+
+#### Phase 5+6 ingest pipelines
+- **Contacts** (`/v1/contacts/*`) : Google People API, search multi-champs (nom/email/tél/org/ID), sort name/family/recent
+- **Tasks** (`/v1/tasks/*`) : CRUD complet (create/toggle/update/delete) via Tasks API. Scope upgrade `tasks` (read+write).
+- **YouTube** (`/v1/youtube/*`) : activities (uploads/likes/favorites), top channels
+
+#### Phase 3c — Drive + Photos
+- **Drive folder navigation** : `/v1/drive/files?parent_id=root` → Drive about API → vrai rootFolderId. Sync 2 passes (folders d'abord, puis files). `'me' in owners` filter pour exclure shares. Endpoint wipe pour resync clean.
+- **Photos Picker API** complet : sessions/start, status poll, mediaItems import. Proxy thumbnails authentifié.
+- **GPS Photos** : ❌ **Bloqué côté Google**. Picker strip les GPS tags pour privacy même avec `baseUrl=d`. Endpoint `/v1/photos/enrich-gps` implémenté + frontend (carte Leaflet, filtre lieux, lightbox modal) mais 0 GPS extraits. Cf `PHOTOS-GPS-ROADMAP.md`.
+
+#### UI overhaul majeur
+- **Calendar** : refonte complète avec vues Jour/3j/Semaine/Agenda + click event modal + couleurs par calendrier (hash → palette 9) + ligne "now" rouge + bandeau all-day
+- **Documents** : breadcrumb folder navigation, click pour entrer/voir détail, recherche globale, filtres tech folders cachés (.git, __pycache__, dist-info, etc.), Resync clean button
+- **Tasks** : CRUD UI (validate, edit modal, supprimer, créer), couleurs par tasklist, filtre overdue
+- **Gmail** : top label chips colorisés (Inbox/Important/Sent...), filtres avancés (date range, sender exact, has_attachment, is_unread), sort 4 modes, bordure expéditeur colorée
+- **Contacts** : sort name/family/recent, search multi-champs, toggles "A email" / "A tel"
+- **Photos** : toggle Grille/Carte, lightbox modal full-size avec navigation clavier ←→ Esc, indicateur GPS sur thumbnails, filtres lieu/année/caméra
+- **Health** : 19 metrics (vs 6 avant), charts area + tendances semaine/semaine, colorisation par metric
+
+#### Phase 4+ Health expansion
+FIT_DATA_TYPES passe de 6 à 19 métriques avec stratégies d'agrégation (sum/avg/last) :
+- + heart_minutes, body_fat_pct, oxygen_saturation, blood_pressure_systolic, body_temp_c, hydration_l, height_m, power_w, speed, cycling cadence/wheel_revs, activity_segments
+
+#### Infrastructure / fiabilité
+- **Watchdog hub-core** (`hub-core-watchdog.ps1`) : process supervisor en background lancé par `launch-app.ps1`. Check `/v1/health` toutes les 30s. Si DOWN → kill uvicorn restants, run init_sqlite.py (auto-migrate), relance, attente healthy 60s. Tué proprement à la fermeture Chrome.
+- **Auto-migrate SQLite** : `init_sqlite.py` ajoute `auto_migrate_sqlite()` qui détecte colonnes manquantes vs `Base.metadata` et fait `ALTER TABLE ADD COLUMN`. Idempotent. Lancé à chaque start-up. Plus de crash "no such column" lors de pull avec nouveau schema.
+- **launch-app.ps1** runtime detection BASE_URL via `window.location.hostname` (vs build-time env var qui foirait pour 1000 raisons : BOM, env vars pas héritées, TS cache, etc.)
+- **API timeout 5min** : AbortController côté frontend, plus de hang infini si serveur down
+- **Toast contextuel** : 5xx ≠ "hub-core down" (juste bug API), 4xx ≠ "down" (mauvaise requête), seul AbortError affiche vraiment "hub-core down"
+
+### Bugs fixés
+- Drive `parent_id=root` retournait tout récursivement → résout rootFolderId via files.get
+- Drive sync seulement 5000 fichiers → 2 passes (folders unlimited puis files)
+- Photos Picker baseUrl requiert Bearer token → proxy `/v1/photos/thumb/{id}`
+- N+1 queries dans sync_photos et picker_import → batch `WHERE media_id IN (ids)`
+- Email perso leak dans User-Agent Nominatim → UA générique
+- `cmd /c set X=Y && build` pas hérité par next.cmd → drop, runtime detection
+- TypeScript incremental cache (`tsconfig.tsbuildinfo`) gardait vieux output → wipe à chaque restart
+- `Set-Content -Encoding utf8` en PS5 ajoute BOM → `[System.IO.File]::WriteAllText` sans BOM
+- `init_sqlite.py` ne migrait pas tables existantes → auto_migrate_sqlite()
+
+### Commits par repo (session #14)
+
+| Repo | Commits | Highlights |
+|---|---|---|
+| hub-core | ~12 | Calendar, Drive, Photos Picker, Tasks CRUD, Health 19 metrics, watchdog migration |
+| hub-frontend | ~10 | UI overhaul 8 pages, Photos lightbox, runtime API URL |
+| hub-deploy | ~6 | Watchdog, auto-migrate launch, restart-frontend cache wipe TS |
+| hub-docs | ~3 | DATA-MAP update, JOURNAL session #13/#14, PHOTOS-GPS-ROADMAP |
+
+### TODOs restants (priorité)
+
+1. **Garmin Connect** Phase 4+ (OAuth séparé Garmin, lib python-garminconnect)
+2. **Streaming hub** (Trakt.tv) : Netflix + Prime + Crunchyroll + autres
+3. **Photos GPS** : nécessite app verification Google OU Drive backup OU local copies
+4. **Loi 25 auto removal** : automatiser les emails PIPEDA aux entreprises
+5. **Cloudflare Tunnel + port forwarding** : quand chez toi
+6. **Docker Desktop install** : retrouver Postgres + 470 transactions Desjardins
+7. **CLIP semantic search** : Phase 7+ (gros download modèle)
+8. **Face recognition** : Phase 7+ (dlib)
+
+### Architecture
+- **16 sources actives** : 8 Google services + 4 sécurité (HIBP, Holehe, Sherlock, breach analysis) + 3 infra (DuckDNS, Restic, Watchdog) + 1 banking
+- **15 endpoints `/v1/*`** : health, finance, locations, ai, oauth, osint, emails, calendar, health_data, photos, drive, contacts, tasks, youtube
+- **Mode SQLite local** sans Docker pour MVP, avec auto-migrate. Mode Postgres+pgvector via Docker quand setup home.

@@ -3,11 +3,39 @@
 > Document de design pour l'enrichissement des photos avec geolocalisation,
 > EXIF complet, face recognition et search semantique.
 
+## ⚠️ Restriction Google ACCEPTÉE (décision 2026-05-01)
+
+**Google Photos Picker API STRIP délibérément les GPS tags de l'EXIF** pour
+protéger la privacy de l'utilisateur. Confirmé par debug : download via
+`baseUrl=d` retourne le JPEG original avec 59 tags EXIF (Image Make, Model,
+DateTime, ExposureTime, FNumber, etc.) **mais ZÉRO tag GPS**.
+
+→ L'endpoint `/v1/photos/enrich-gps` fonctionne (parse l'EXIF correctement)
+mais retourne systématiquement `with_gps=0` car Google n'envoie pas le GPS.
+
+**Décision Marc 2026-05-01 : on reste sur Picker API uniquement.**
+
+Marc a refusé toutes les alternatives :
+- ❌ App verification Google (long, lourd)
+- ❌ Drive API (Marc n'a pas ses photos dans Drive)
+- ❌ Takeout (manuel, refusé)
+- ❌ Photos locales (Marc n'a pas de copies locales)
+
+**Conséquence** : la fonctionnalité GPS reste inactive. Le code (DB columns,
+endpoint, service, frontend map) reste en place pour le jour où Google ouvrirait
+l'API ou si Marc change d'avis. Les EXIF non-GPS (camera Make/Model, DateTime,
+ExposureTime, etc.) sont eux récupérés et stockés.
+
+Ref Google : https://developers.google.com/photos/picker (section Privacy)
+
 ## Statut
 
 - ✅ Modèle DB enrichi : champs `latitude`, `longitude`, `altitude_m`, `location_name`, `exif_data`, `faces_count`, `faces_data`, `clip_embedding`
 - ✅ Index composite `(latitude, longitude)` pour bbox queries
-- ⏸️ Implémentation : reportée (GPS extraction nécessite download des bytes)
+- ✅ Endpoint `/v1/photos/enrich-gps` implémenté (download bytes + exifread + Nominatim)
+- ✅ Frontend : vue carte Leaflet + filtre "Avec GPS" + filtre par lieu
+- ❌ **Bloqué par Picker API** qui strip GPS. Implémentation ne récupère 0 photo.
+- 🔜 Vraie Phase 3c+ : implémenter via Drive API ou app verification
 
 ## Phase 3c+ : Extraction GPS (à implémenter)
 
