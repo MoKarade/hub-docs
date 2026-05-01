@@ -4,7 +4,7 @@
 >
 > **Mis à jour automatiquement** par Claude à chaque ajout/connexion.
 
-**Dernière mise à jour** : 2026-04-30
+**Dernière mise à jour** : 2026-05-01 (Session #13 - Phase 3+4 ingest)
 
 ---
 
@@ -16,22 +16,29 @@
 | 💳 Mastercard Desjardins | ✅ Code OK | PDF parser | Mensuel | Phase 1 |
 | 📈 Disnat (placements) | ✅ Code OK | PDF parser | Mensuel | Phase 1 |
 | 📍 Google Timeline | 📋 Attente data | Takeout ZIP | One-shot + delta | Phase 2 |
-| 📧 Gmail | 📋 OAuth prêt | OAuth API | Auto continuous | Phase 3 |
-| 📸 Google Photos | 📋 OAuth prêt | Takeout ZIP | One-shot + delta | Phase 3 |
-| 📁 Google Drive | 📋 OAuth prêt | OAuth API | Auto | Phase 3 |
-| 🔐 Mots de passe Google | 📋 À implémenter | Export CSV manuel | Mensuel | Phase 4 |
-| 🛡️ HIBP scan masse | 📋 À implémenter | Client-side k-anonymity | À la demande | Phase 4 |
-| 📅 Google Calendar | 📋 OAuth prêt | iCal/OAuth | Auto | Phase 5 |
-| 💪 Garmin Connect | 📋 À implémenter | garmin-connect-py | Quotidien | Phase 5 |
-| 💪 Google Fit | 📋 OAuth prêt | OAuth API | Auto | Phase 5 |
+| 📧 **Gmail** | ✅ **Live** (50 emails testés) | `/v1/emails/sync` | À la demande | Phase 3 |
+| 📅 **Google Calendar** | ✅ Code-complete | `/v1/calendar/sync` | À la demande | Phase 3 |
+| 💪 **Google Fit** (santé) | ✅ Code-complete (6 metrics) | `/v1/health-data/sync` | À la demande | Phase 4 |
+| 📸 Google Photos | 📋 OAuth prêt | OAuth API + CLIP embeddings | Auto | Phase 3c |
+| 📁 Google Drive | 📋 OAuth prêt | OAuth API | Auto | Phase 3c |
+| 🔐 Mots de passe Google | ✅ Code OK | Export CSV + scan HIBP local | Mensuel | Phase 4 |
+| 🛡️ HIBP scan masse mdp | ✅ **Live** | Client-side k-anonymity | À la demande | Phase 4 |
+| 🛡️ HIBP breach analysis | ✅ **Live** | Cross-ref domaines × HIBP /breaches | À la demande | Phase 4 |
+| 🛡️ Holehe (email→services) | ✅ **Live** | `/v1/osint/holehe` | À la demande | Phase 4 |
+| 🛡️ Sherlock (username) | ✅ **Live** | `/v1/osint/sherlock` | À la demande | Phase 4 |
+| 🌐 DuckDNS | ✅ **Live** (`hubperso.duckdns.org`) | Task Scheduler 5min | Continuous | Phase 0 fin |
+| 💾 Restic backup OneDrive | ✅ **Live** | Task Scheduler daily 04h | Daily | Phase 0 fin |
+| 💪 Garmin Connect | 📋 À implémenter | garmin-connect-py | Quotidien | Phase 4+ |
 | 📄 Documents PDF | 📋 À implémenter | Watch dossier | Continuous | Phase 5 |
-| 👥 Google Contacts (People) | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5+ |
-| ✅ Google Tasks | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5+ |
-| 📺 YouTube historique | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5+ |
-| 🏃 Strava | 📋 À implémenter | OAuth | Auto | Phase 5+ |
-| 🎵 Spotify | 📋 À implémenter | OAuth | Auto | Phase 6+ |
+| 👥 Google Contacts (People) | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5 |
+| ✅ Google Tasks | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5 |
+| 📺 YouTube historique | 📋 OAuth prêt | OAuth API | Hebdo | Phase 6 |
+| 🏃 Strava | 📋 À implémenter | OAuth | Auto | Phase 6 |
+| 🎵 Spotify | 📋 À implémenter | OAuth | Auto | Phase 6 |
+| 🚪 Cloudflare Tunnel | 📋 Code OK, attend setup chez Marc | start-tunnel.ps1 | Continuous | Phase 0 fin |
+| 🚪 Port forwarding routeur | ⏸️ TODO chez Marc | Manuel | One-shot | Phase 0 fin |
 
-**Légende** : ✅ Connecté · 🔄 En cours · 📋 Code prêt mais data pas encore importée
+**Légende** : ✅ Live ou code-complete · 🔄 En cours · 📋 Code prêt mais inactif · ⏸️ Bloqué TODO externe
 
 ---
 

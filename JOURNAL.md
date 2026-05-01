@@ -1105,3 +1105,68 @@ hub-deploy/
 3. **Holehe + Sherlock backend integration** (hub-ingest) : actuellement instructions CLI manuelles, automatiser via endpoint `/v1/osint/scan`
 4. **Phase 0 fin restant** : DuckDNS + restic backup vers OneDrive
 5. **Sprint UI cleanup global** : la section Connexions Google dans /settings a 9 cartes verbeuses, à trimmer
+
+---
+
+## Session #13 — Phase 3 + Phase 4 ingest pipelines (2026-05-01)
+
+**Contexte** : DuckDNS configuré (`hubperso.duckdns.org`), Restic backup vers OneDrive opérationnel. OAuth Google connecté pour 8 services. Marc demande "phase 3 ingest" : passer de tokens dormants à vraie ingestion de données.
+
+### Livré end-to-end
+
+#### Phase 3a — Gmail (testé 50 emails/3.7s)
+- Modèle `Email` (gmail_id unique, sender_email indexed, body_text + body_html, labels array, has_attachments, is_unread)
+- Endpoints `/v1/emails/{sync,list,get,stats}` :
+  - sync : pull Gmail API users.messages.list/get, parse MIME parts, idempotent par gmail_id, concurrence 10
+  - list : filtres sender_email, since/until, q text, label, is_unread + pagination
+  - stats : top 20 senders, counts par mois (compatible SQLite + Postgres)
+- Page `/emails` : sync button + KPIs + top expéditeurs cliquables (filtre instant) + recherche full-text + détail modal
+
+#### Phase 3b — Google Calendar
+- Modèle `CalendarEvent` (gcal_id unique, calendar_id, all_day, attendees array, html_link)
+- Endpoints `/v1/calendar/{sync,events,stats}` : pull tous les calendars du user, paginate par calendar (2500 events max each), idempotent par gcal_id
+- Page `/calendar` : sync button + 3 KPIs + liste timeline avec date/heure/lieu/participants + lien Google Calendar
+
+#### Phase 4 — Google Fit (santé)
+- Modèle unifié `HealthMetric` (date + metric + value + source) avec UniqueConstraint pour idempotence
+- Endpoints `/v1/health-data/{sync,metrics,summary}` : Fit Aggregate API bucketize daily, 6 metrics (steps, distance_m, calories, active_minutes, weight_kg, heart_rate_avg)
+- Page `/health` : sync button + 6 cards iconiques (1 par metric) avec moyenne 90j + dernière date + count datapoints
+
+### Bugs fixés en cours
+
+1. **`get_valid_access_token` naive datetime** : SQLite stocke les datetime sans tzinfo → comparaison `datetime.now(UTC) < token.token_expires_at` levait `TypeError`. Fix : assume UTC si `tzinfo is None`.
+
+2. **`restart-frontend.ps1` n'embarquait pas `NEXT_PUBLIC_HUB_API_URL`** : le bundle Next.js avait `BASE_URL = '/api'` → 404 sur tous les calls API. Fix : set explicitement l'env var via `cmd /c "set NEXT_PUBLIC_HUB_API_URL=... && next.cmd build"` avant le build.
+
+3. **Sync all emails** : `since_days` était par défaut 30 (Marc voulait tout). Default → `None` (= tout l'historique Gmail). max_results bumpé de 2000 à 100000.
+
+### Pré-requis OAuth pour les sync
+
+Marc doit avoir activé ces APIs dans Google Cloud Console :
+- ✅ Gmail API (déjà actif)
+- ⏳ Calendar API (à activer si pas déjà)
+- ⏳ Fitness API (à activer si pas déjà)
+- ⏳ Photos Library API (Phase 3c, plus tard)
+
+Si une API n'est pas activée, le sync retourne 502 avec message clair côté backend (catch `httpx.HTTPStatusError`).
+
+### Données Phase 3+4 récapitulées (à ce stade DB SQLite, pas Docker)
+
+| Source | Status | Volume test |
+|---|---|---|
+| Gmail | ✅ Opérationnel | 50 emails / 3.7s sur sync 30j |
+| Calendar | ✅ Code-complete (à tester par Marc) | - |
+| Google Fit | ✅ Code-complete (à tester par Marc) | - |
+| Google Photos | ⏸️ Phase 3c (CLIP embeddings requis pour search sémantique) |
+| Drive | ⏸️ Phase 3c |
+| Tasks | ⏸️ Phase 5 |
+| YouTube history | ⏸️ Phase 6 |
+| People (contacts) | ⏸️ Phase 5 |
+
+### Bugs restants / TODO
+
+- **Build env var sur launch-app.ps1** : déjà OK (set explicite). restart-frontend.ps1 corrigé aussi.
+- **Calendar sync attendees** : on stocke juste les emails, pas les noms de display. À enrichir.
+- **Health sleep données** : Google Fit Aggregate API ne retourne pas les phases sommeil par bucket — il faudrait `users.sessions.list` séparément. Phase 4+ enhancement.
+- **Photos Phase 3c** : nécessite CLIP embedding model (gros download) pour search sémantique dans les images. Skipped pour l'instant.
+- **Port forwarding routeur** + **Cloudflare Tunnel** : dernière phase quand Marc est chez lui.
