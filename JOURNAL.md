@@ -1366,3 +1366,136 @@ npm run dev        # Ready in 3.4s
 - Backend `/v1/locations/stats` : `{"total_visits":13646,"unique_places":3094,"home_visits":2021,"work_visits":728,"earliest_date":"2013-05-25","latest_date":"2026-01-12","total_path_points":155495,"total_activities":12333}`
 - Frontend `/locations` : HTTP 200, contient les 3 onglets (Carte GPS / Visites / Stats)
 - Proxy Next.js `/api/v1/*` → hub-core :8000 OK
+
+---
+
+## Session #17 — 2026-05-04 — Phase 2 explorer XXL : carte, voyages, journée, géocodage, IA conversationnelle
+
+### Contexte
+
+Session marathon entamée après Phase 2 livrée (#15). Marc demande des features de niveau "Google Maps perso" : exploration multi-modes, détection auto de voyages, géocodage de tous ses lieux, IA conversationnelle.
+
+### Bilan brut
+
+**21 commits** (8 hub-core + 13 hub-frontend) sur la journée. Tout fonctionnel, tout testé live.
+
+### Backend — `hub-core` : 30+ nouveaux endpoints `/v1/locations/*`
+
+| Endpoint | Rôle |
+|---|---|
+| `POST /retag` | Retagger toutes les visites dans un rayon |
+| `PATCH /visits/{id}` | Modifier le type sémantique d'une visite |
+| `GET /place-stats` | Stats d'un lieu : count, durée, breakdown |
+| `GET /day` | Tout d'une journée : visites + activités + path |
+| `GET /trips` | Voyages auto-détectés depuis centroid HOME |
+| `GET /reverse-geocode` | Adresse via Nominatim (cache mémoire + DB) |
+| `GET /top-places` | Top N lieux par binning |
+| `GET /streaks` | Records (sans avion, conseq HOME, etc.) |
+| `GET /gaps` | Trous de données >X heures |
+| `GET /auto-detect-work` | Cluster weekday daytime → coords WORK |
+| `GET /year-comparison` | Visites mensuelles par année |
+| `GET /activity-stats` | Breakdown par type d'activité |
+| `GET /visits-by-year` | Visites par année avec home/work counts |
+| `GET /regions` | Pays/villes uniques + breakdown par pays |
+| `GET /addresses` | Index léger des adresses cachées |
+| `GET /visits-with-addresses` | Visites jointes au cache d'adresses |
+| `POST /geocode-batch` | Worker async batch reverse-geocoding |
+| `GET /geocode-progress` | Polling % + ETA + last_address |
+| `POST /geocode-stop` | Stop le worker |
+| `GET /insights` | AI proactive : 5 insights auto-détectés |
+| `GET POST PATCH DELETE /named-places` | CRUD lieux nommés |
+| `GET PUT DELETE /trip-notes` | Notes de voyage |
+
+### Nouvelles tables + migrations
+
+- `location_addresses` — cache reverse-geocoding par cellule (lat_e4, lng_e4)
+- `named_places` — lieux nommés (Maison parents, Chalet, Gym...)
+- `trip_notes` — notes libres ancrées par start_date
+
+Migrations : `b8d4c2e1a3f5_add_location_addresses` + `c9e5d3f2a1b6_add_named_places_trip_notes`
+
+### IA module (`ai.py`)
+
+- Schéma DB enrichi avec les 3 tables location
+- Whitelist `_ALLOWED_TABLES` étendu
+- 6 nouveaux few-shot examples
+- `AskRequest.history` accepte la conversation : permet "Et avant ?", "Le suivant ?"
+- Test live : "France 2024 ?" → 245 visites → "Et en 2023 ?" → SQL adapté → 103 jours
+
+### Frontend — 6 onglets sur `/locations`
+
+```
+app/locations/page.tsx           (~1700 LOC, orchestrateur)
+├── components/location-map.tsx  (Leaflet : 4 modes + clustering + addressLookup)
+├── components/locations/
+│   ├── click-popup.tsx          (popup riche au clic carte)
+│   ├── journee-tab.tsx          (date picker + timeline + carte + Calendar + Photos)
+│   ├── voyages-tab.tsx          (cards trips avec mini-map + photos + notes)
+│   ├── batch-geocode.tsx        (worker geocode + progress live)
+│   ├── named-places.tsx         (CRUD lieux nommés)
+│   └── trip-note-editor.tsx     (modal notes voyage)
+├── lib/addresses.ts             (helper buildAddressLookup avec tolérance ±1 cellule)
+└── types/leaflet.heat.d.ts      (shim TS pour leaflet.heat plugin)
+```
+
+1. **Carte GPS** — 4 modes (visites/points/trajets/heatmap) + 4 styles tuiles (dark/voyager/satellite/topo) + clustering + légende interactive + click-popup avec place-stats + plein écran + split 2 dates + heatmap year slider
+2. **Journée** — date picker + timeline chronologique + carte + Calendar events (modal détail) + Photos (lightbox)
+3. **Visites** — liste paginée + filter sémantique + quick-retag inline
+4. **Voyages** — détection auto + recherche + filter année + cards avec mini-map + auto-name + photos + notes
+5. **Stats** — Vue globale + répartition + transports + histogramme + Pays/Villes (drill-down) + Top 10 + Records + auto-WORK + Trous + Comparaison année (que les complètes)
+6. **Mes Lieux** — CRUD lieux nommés + Batch geocoding live + visites HOME/WORK avec adresses
+
+### InsightsBar (proactive, cliquable)
+
+5 cards au-dessus des onglets : évolution année, "loin de chez toi", anniversaire voyage, lieu top semaine, distance ce mois. Click → modal explicatif + question CTA pré-formulée.
+
+### Cohérence avec le reste de l'app — vérifié ✅
+
+| Convention | Respect |
+|---|---|
+| API versionnée `/v1/*` | ✅ Tous les endpoints |
+| Stack ennuyeuse | ✅ SQLAlchemy + FastAPI + httpx + Pydantic v2 |
+| Local-first | ✅ Nominatim cache local, pas d'API tierce payante |
+| Event sourcing (ADR-0002) | ✅ location_addresses = cache rejouable |
+| Pas de fake data | ✅ Tout testé sur la vraie DB Marc |
+| Idempotence | ✅ dedup_hash UNIQUE + INSERT OR IGNORE / ON CONFLICT |
+| Logging structlog | ✅ geocode_batch, trips_home_cluster, etc. |
+| Dual-dialect SQLite + PG | ✅ `_is_sqlite()` helper |
+| Palette ink + accent vert | ✅ Aucun violet AI-générique |
+| Lucide icons | ✅ Pas de glyphes ASCII |
+| Densité élevée | ✅ Sparklines, dots, panels |
+| Font-mono pour chiffres | ✅ Coords, dates, métriques |
+| Animations subtiles | ✅ framer-motion stagger |
+| Loading states | ✅ Skeletons animate-pulse |
+
+### Bugs fixés (Marc feedback)
+
+1. Map vide par défaut (date hors range) → fix : 2 mois avant `latest_date`
+2. Voyages inversés (centroid HOME en France) → fix : clustering grille + recency 12 mois
+3. Histogramme année invisible → fix : h-40 + flex-1
+4. Voyager URL cassée → fix : rastertiles/voyager/{z}/{x}/{y}
+5. Cluster boxy ugly → fix : iconCreateFunction custom (ronds verts log)
+6. Photos vides (base_url expired) → fix : photoThumbUrl() proxy backend
+7. Calendar events pas de date/heure → fix : start_at/end_at + modal détail
+8. Country drill-down manquant → fix : modal cities ranked
+9. Trip names absents → fix : lookup tolérant ±5 cellules
+10. Insights statiques → fix : motion.button + InsightModal + CTA
+11. Year compare absurde (2026 vs 2025) → fix : defaults sur années COMPLÈTES
+12. "Domicile" partout au lieu d'adresses → fix : MiniVisitRow utilise addressLookup
+
+### TODO restant pour ce module
+
+- **#16 AI alertes** : nécessite cron infra + ntfy. Sera fait avec APScheduler (notifs push pour anniversaires, absences, etc.)
+
+### Stack live à la fin de la session
+
+- 🟢 hub-core :8000 — 30+ routes locations + AI conversational
+- 🟢 hub-frontend :3000 — 6 onglets, tous fonctionnels
+- 🟢 Geocode worker en background, priorité visites récentes (Quebec)
+- 🟢 SQLite local, 3 nouvelles tables migrées
+
+### Commits de la session
+
+**hub-core** : `4c1a77e` `4ec5c95` `77ff1d0` `0691c74` `af739e0` `7b82974` `0fae2ab` `3b54fb3`
+
+**hub-frontend** : `d5ed505` `be046ba` `0ef5332` `95920c1` `b7c63a5` `96a1849` `b0e2c65` `2e51a17` `786a783`
