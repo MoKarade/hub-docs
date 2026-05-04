@@ -34,7 +34,7 @@
 - ✅ **YouTube** : activities/channels (Phase 6)
 - ✅ **Health** (Google Fit) : 19 metrics avec stratégies sum/avg/last (Phase 4)
 - ✅ **Sécurité** : HIBP password + breach analysis + Holehe + Sherlock (Phase 4)
-- ⏸️ **Localisation** : code-complete, attend Takeout JSON Marc
+- ✅ **Localisation** (Phase 2) : Timeline.json 75MB ingéré → 13 646 visites + 155 495 points GPS + 12 333 activités. Page `/locations` 3 onglets (Carte / Visites / Stats). Parser tolère les 2 formats Google (`locations[]` legacy + `semanticSegments[]` 2024+).
 - ✅ **Garmin Connect** (Phase 4+) : endpoints code-complete (`/v1/garmin/connect`, `/v1/garmin/sync`, `/v1/garmin/status`), garth tokens en DB chiffrés, 19 métriques — attend credentials Marc pour test live
 - 📋 **Streaming hub** (Trakt.tv pour Netflix/Prime/Disney+/Crunchyroll, Phase 6)
 - 📋 **Loi 25 auto removal** (PIPEDA emails)
@@ -50,7 +50,7 @@
 
 **Prochaines actions concrètes (priorité) :**
 1. [ ] **Marc chez lui** : install Docker Desktop → retrouver les 470 transactions Desjardins en Postgres
-2. [ ] **Marc fournit Takeout** : Google Maps Timeline JSON → activer Phase 2 (parser code-complete)
+2. [ ] **Frontend dev** : `node_modules` en mode streaming Google Drive empêche `npm install` rapide. Solution : copier `hub-frontend` sur disque local (`C:\hub\hub-frontend`) avant de relancer le dev server.
 3. [ ] **Garmin Connect test live** : `POST /v1/garmin/connect` avec credentials Marc → valider sync métriques
 4. [ ] **Cloudflare Tunnel permanent** (phase future) : nécessite vrai domaine (Cloudflare Registrar ou autre) pour CNAME
 5. [ ] **Streaming hub** : OAuth Trakt.tv → cross-ref Netflix/Disney+/Prime/Crunchyroll (Phase 6)
@@ -1273,3 +1273,65 @@ FIT_DATA_TYPES passe de 6 à 19 métriques avec stratégies d'agrégation (sum/a
 - **16 sources actives** : 8 Google services + 4 sécurité (HIBP, Holehe, Sherlock, breach analysis) + 3 infra (DuckDNS, Restic, Watchdog) + 1 banking
 - **15 endpoints `/v1/*`** : health, finance, locations, ai, oauth, osint, emails, calendar, health_data, photos, drive, contacts, tasks, youtube
 - **Mode SQLite local** sans Docker pour MVP, avec auto-migrate. Mode Postgres+pgvector via Docker quand setup home.
+
+---
+
+## Session #15 — 2026-05-04 — Phase 2 Localisation livrée
+
+### Contexte
+Marc a fourni `Timeline.json` (75 Mo) dans Downloads après plusieurs sessions de bootstrap.
+Format moderne `semanticSegments[]` (Timeline 2024+), pas `locations[]` legacy.
+
+### Réalisations
+1. **Modèles `LocationVisit` + `LocationActivity`** (`hub-core/src/db/models/location_visit.py`)
+   - `LocationVisit` : start/end_time, lat/lng, place_id, semantic_type (HOME/WORK/...), probability, dedup_hash UNIQUE
+   - `LocationActivity` : start/end_time, activity_type (WALKING/IN_VEHICLE/...), distance_meters, start/end coords, dedup_hash UNIQUE
+   - Migration autogénérée `93cf1ed7b005_add_location_visits_and_activities`
+
+2. **API étendue** (`hub-core/src/api/v1/locations.py`)
+   - `POST /v1/locations/ingest-file` : auto-détection format + bulk insert idempotent
+   - `GET /v1/locations/visits` : filtrage par type/date
+   - `GET /v1/locations/stats` : 7 métriques globales
+   - Helpers tolérants : encodage `°` ET `Â°` (UTF-8 lu en Latin-1), ms-epoch ET ISO 8601
+   - Bulk dual-dialect : `INSERT OR IGNORE` (SQLite) / `ON CONFLICT DO NOTHING` (PostgreSQL)
+
+3. **Parser hub-ingest** (`hub-ingest/src/parsers/google_takeout_timeline.py`)
+   - `detect_timeline_format()` + `parse_any_timeline()` dispatcher
+   - `parse_google_timeline_semantic()` streame 3 types d'events (Point/Visit/Activity)
+   - Tolère tous les Timeline.json Google rencontrés à ce jour
+
+4. **Frontend `/locations`** (`hub-frontend/app/locations/page.tsx`)
+   - 3 onglets : Carte GPS / Visites / Stats
+   - 6 stat tiles globales en haut
+   - Bouton "Ingest Timeline.json" qui POST le path local
+   - `LocationMap` : cercles colorés par type sémantique (HOME=vert, WORK=bleu, ...) ou activité (WALKING/IN_VEHICLE/FLYING/...), taille proportionnelle à la durée (log scale)
+   - Couche points GPS + couche visites superposables
+
+### Résultats sur Timeline.json réel
+| Metric | Valeur |
+|---|---|
+| Visites insérées | 13 646 |
+| Points GPS insérés | 155 495 |
+| Activités insérées | 12 333 |
+| Durée ingest | 440 sec |
+| Median speed | 9.3 km/h (marche) |
+| 95p speed | 97.3 km/h (autoroute) |
+| Jumps >500 km/h | 3 (tous = vols intercontinentaux : Berlin→Lille, Dubai→Adelaide, Dubai→CDG) |
+
+**Trajets cohérents : tous sur des routes réelles ou des trajectoires de vol plausibles.**
+
+### Fix collatéral
+Migration `a1b2c3d4e5f6_phase3_oauth_tokens.py` utilisait `postgresql.ARRAY(sa.Text())`
+incompatible SQLite. Remplacé par `sa.Text()` avec `server_default=""` (JSON string en SQLite,
+type natif compatible côté PG).
+
+### Bloqueur connu
+`hub-frontend/node_modules` en mode streaming Google Drive : `npm install` met >50 min de
+CPU sans aboutir. Pour relancer le dev server, copier `hub-frontend` sur disque local
+(par exemple `C:\hub\hub-frontend`) avant `npm install` + `npm run dev`.
+
+### Commits
+- `hub-core`     : `4c1a77e` feat(locations): Phase 2 — ingest Timeline.json
+- `hub-frontend` : `d5ed505` feat(locations): refonte page /locations
+- `hub-ingest`   : `06a9eb3` feat(timeline): parser supporte format semanticSegments
+
