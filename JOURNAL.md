@@ -50,7 +50,7 @@
 
 **Prochaines actions concrètes (priorité) :**
 1. [ ] **Marc chez lui** : install Docker Desktop → retrouver les 470 transactions Desjardins en Postgres
-2. [ ] **Frontend dev** : `node_modules` en mode streaming Google Drive empêche `npm install` rapide. Solution : copier `hub-frontend` sur disque local (`C:\hub\hub-frontend`) avant de relancer le dev server.
+2. [x] **Frontend dev** : résolu. `hub-frontend` cloné en local dans `C:\hub\hub-frontend` (Drive virtuel n'est pas NTFS donc junctions impossibles). `npm install` rapide, `npm run dev` opérationnel sur :3000. Source canonique reste Drive ; pour synchroniser : `cd C:\hub\hub-frontend && git pull` après chaque commit fait dans Drive (ou inverse).
 3. [ ] **Garmin Connect test live** : `POST /v1/garmin/connect` avec credentials Marc → valider sync métriques
 4. [ ] **Cloudflare Tunnel permanent** (phase future) : nécessite vrai domaine (Cloudflare Registrar ou autre) pour CNAME
 5. [ ] **Streaming hub** : OAuth Trakt.tv → cross-ref Netflix/Disney+/Prime/Crunchyroll (Phase 6)
@@ -1335,3 +1335,34 @@ CPU sans aboutir. Pour relancer le dev server, copier `hub-frontend` sur disque 
 - `hub-frontend` : `d5ed505` feat(locations): refonte page /locations
 - `hub-ingest`   : `06a9eb3` feat(timeline): parser supporte format semanticSegments
 
+
+---
+
+## Session #16 — 2026-05-04 — Frontend dev local (résolution streaming Drive)
+
+### Problème
+`hub-frontend/node_modules` dans Google Drive en mode streaming :
+- npm install bloqué >50 min CPU sans aboutir (process I/O wait sur fichiers virtualisés)
+- `mklink /J` (junction NTFS) refuse de créer un lien depuis Drive virtuel : "Des volumes NTFS locaux sont requis"
+
+### Solution
+Cloner `hub-frontend` sur disque local. Le repo principal reste dans Drive (synchro multi-PC, JOURNAL/docs partagés), mais le **dev frontend tourne depuis un clone local**.
+
+```powershell
+git clone "G:\Mon disque\PERSO & LOISIRS\AUTOMATISATION\Projets\Hub perso\hub-frontend" C:\hub\hub-frontend
+cd C:\hub\hub-frontend
+copy "G:\...\hub-frontend\.env.local" .env.local
+npm install        # ~2 min sur SSD local
+npm run dev        # Ready in 3.4s
+```
+
+### Workflow recommandé
+- **Source canonique** = Drive (pour multi-PC + sync JOURNAL/docs)
+- **Dev server** = `C:\hub\hub-frontend`
+- Quand tu commit dans Drive : `cd C:\hub\hub-frontend && git pull`
+- Quand tu commit dans `C:\hub\hub-frontend` : `cd "G:\...\hub-frontend" && git pull` (et push vers GitHub)
+
+### Vérification
+- Backend `/v1/locations/stats` : `{"total_visits":13646,"unique_places":3094,"home_visits":2021,"work_visits":728,"earliest_date":"2013-05-25","latest_date":"2026-01-12","total_path_points":155495,"total_activities":12333}`
+- Frontend `/locations` : HTTP 200, contient les 3 onglets (Carte GPS / Visites / Stats)
+- Proxy Next.js `/api/v1/*` → hub-core :8000 OK
