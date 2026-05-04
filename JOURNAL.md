@@ -10,24 +10,52 @@
 
 ## Plan en cours
 
-### Phase actuelle : **Étape 1 — Refonte UI + nouvelles sources de data**
+### Phase actuelle : **Phases 3-6 livrées + maintenance** (post Session #14)
 
-> Contexte : Session #2 (2026-04-29) a terminé A+C+D+E (62 fichiers, 5 repos). Marc a demandé un redesign UI majeur + élargissement du scope (santé, streaming, sécurité). Les 16 questions de discovery ont été posées et **répondues le 2026-04-29**.
->
-> Les décisions sont verrouillées : voir `sessions/2026-04-29_marc_answers_discovery.md`.
-> Le plan complet est dans `sessions/SUITE.md`.
+> Mise à jour 2026-05-04. Tout l'écosystème Google API est code-complete (Gmail, Calendar,
+> Drive, Photos Picker, Contacts, Tasks, YouTube, Fit). Health expansion 19 metrics. Watchdog
+> hub-core actif. Mode SQLite local + auto-migrate fonctionnel.
 
-**Prochaines actions (dans l'ordre) :**
-1. [x] **Étape 1 Sprint A** — système d'animations framer-motion + `Widget` conteneur + `LayoutProvider` ✅ CODE LIVRÉ + bugs corrigés + **CI 100% vert** (hub-frontend #7, hub-core #5, hub-ingest #4)
-2. [x] **Étape 1 Sprint B** — SSE realtime + dnd-kit drag-drop + mode focus + resize widgets ✅ CODE LIVRÉ (hub-frontend `473aa32`, hub-core déjà poussé)
-3. [x] **Étape 1 Sprint C** — reskinage Google Analytics dark ✅ CODE LIVRÉ + **TESTÉ LOCALEMENT** (5 commits b857b53→eb95328). Brief design dans `sessions/sprint-c-design-brief.md`. Frontend accessible sur http://localhost:3000.
-4. [x] **Étape 1 Sprint D** — 8 pages stubs (`/emails`, `/photos`, `/calendar`, `/documents`, `/health`, `/insights`, `/settings`, `/system/health`) + mobile responsive (sidebar hamburger) + PWA (manifest + InstallPrompt) ✅ CODE LIVRÉ (`b71044e`)
-5. [x] **Étape 1 Sprint E** — Fix erreurs (`/apps/*` 404) + 404 page custom + scripts `launch-app.ps1` + `install-desktop-app.ps1` (vraie app desktop avec raccourci bureau + menu Démarrer) ✅ LIVRÉ (`83795cb`, `f9f4428`)
-6. [ ] **Étape 1 Sprint B+** — SSE realtime + dnd-kit advanced (deferred jusqu'au déploiement)
-6. [ ] **Étape 2** — Déployer sur le vrai PC (Docker + Ollama + GPU)
-6. [ ] **Étape 3** — Phase 0 fin (tunnel Cloudflare + backup restic)
-7. [ ] **Étape 4** — Phase 2 fin (Marc fournit son Google Takeout)
-8. [ ] **Étapes 5-7** — Santé (Garmin/Google Fit) + Streaming/Gaming + Sécurité+Suppression
+**État réel des sprints UI** (Étape 1) — TOUS livrés :
+- [x] Sprint A — framer-motion + Widget + LayoutProvider (CI 100% vert)
+- [x] Sprint B — SSE realtime + dnd-kit drag-drop + focus + resize
+- [x] Sprint C — reskinage Google Analytics dark (5 commits)
+- [x] Sprint D — 8 pages stubs + mobile responsive + PWA
+- [x] Sprint E — Fix `/apps/*` 404 + 404 custom + launch-app + install-desktop
+
+**Sources de data — état réel** (cf. DATA-MAP.md à jour) :
+- ✅ **Banking** : Desjardins CSV/PDF + Mastercard + Disnat (Phase 1, 470 transactions de test)
+- ✅ **Gmail** : sync live (Phase 3a)
+- ✅ **Calendar** : Day/3day/Week/Agenda views, code-complete (Phase 3b)
+- ✅ **Drive** : folder navigation 2-pass sync, code-complete (Phase 3c)
+- ✅ **Photos Picker** : sessions/import/lightbox/map. GPS bloqué par Google (décision Marc = Picker only)
+- ✅ **Contacts** (People API) : search multi-champs (Phase 5)
+- ✅ **Tasks** : CRUD complet (Phase 5)
+- ✅ **YouTube** : activities/channels (Phase 6)
+- ✅ **Health** (Google Fit) : 19 metrics avec stratégies sum/avg/last (Phase 4)
+- ✅ **Sécurité** : HIBP password + breach analysis + Holehe + Sherlock (Phase 4)
+- ⏸️ **Localisation** : code-complete, attend Takeout JSON Marc
+- 📋 **Garmin Connect** (Phase 4+)
+- 📋 **Streaming hub** (Trakt.tv pour Netflix/Prime/Disney+/Crunchyroll, Phase 6)
+- 📋 **Loi 25 auto removal** (PIPEDA emails)
+
+**Infra actuelle** :
+- ✅ DuckDNS live (`hubperso.duckdns.org`, cron 5min)
+- ✅ Restic backup OneDrive (cron daily 04h)
+- ✅ Watchdog hub-core (auto-restart si crash)
+- ✅ Auto-migrate SQLite à chaque startup
+- ⏳ **Docker Desktop install** (chez Marc) → retour à Postgres+pgvector
+- ⏳ **Cloudflare Tunnel + port forwarding** (chez Marc)
+
+**Prochaines actions concrètes (priorité) :**
+1. [ ] **Marc chez lui** : install Docker Desktop → retrouver les 470 transactions Desjardins en Postgres
+2. [ ] **Marc chez lui** : Cloudflare Tunnel + Access + DuckDNS live (Phase 0 fin)
+3. [ ] **Marc fournit Takeout** : Google Maps Timeline JSON → activer Phase 2 (parser code-complete)
+4. [ ] **Garmin Connect** : python-garminconnect, OAuth Garmin séparé (Phase 4+)
+5. [ ] **Streaming hub** : OAuth Trakt.tv → cross-ref Netflix/Disney+/Prime/Crunchyroll (Phase 6)
+6. [ ] **Loi 25 auto removal** : automatiser emails PIPEDA (Module Suppression D16)
+7. [ ] **CLIP semantic search** photos (Phase 7+, modèle 600MB local)
+8. [ ] **Face recognition** photos via dlib (Phase 7+)
 
 ---
 

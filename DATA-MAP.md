@@ -4,7 +4,7 @@
 >
 > **Mis à jour automatiquement** par Claude à chaque ajout/connexion.
 
-**Dernière mise à jour** : 2026-05-01 (Session #13 - Phase 3+4 ingest)
+**Dernière mise à jour** : 2026-05-04 (post Session #14 - Phases 3-6 livrées)
 
 ---
 
@@ -12,15 +12,19 @@
 
 | Source | Statut | Méthode | Fréquence | Phase |
 |---|---|---|---|---|
-| 💳 Banking Desjardins (CSV) | ✅ Code OK | Manuel CSV/PDF | Mensuel | Phase 1 |
+| 💳 Banking Desjardins (CSV) | ✅ Code OK (470 txn test) | Manuel CSV/PDF | Mensuel | Phase 1 |
 | 💳 Mastercard Desjardins | ✅ Code OK | PDF parser | Mensuel | Phase 1 |
 | 📈 Disnat (placements) | ✅ Code OK | PDF parser | Mensuel | Phase 1 |
-| 📍 Google Timeline | 📋 Attente data | Takeout ZIP | One-shot + delta | Phase 2 |
-| 📧 **Gmail** | ✅ **Live** (50 emails testés) | `/v1/emails/sync` | À la demande | Phase 3 |
-| 📅 **Google Calendar** | ✅ Code-complete | `/v1/calendar/sync` | À la demande | Phase 3 |
-| 💪 **Google Fit** (santé) | ✅ Code-complete (6 metrics) | `/v1/health-data/sync` | À la demande | Phase 4 |
-| 📸 Google Photos | 📋 OAuth prêt | OAuth API + CLIP embeddings | Auto | Phase 3c |
-| 📁 Google Drive | 📋 OAuth prêt | OAuth API | Auto | Phase 3c |
+| 📍 Google Timeline | ⏸️ Attente Takeout Marc | Takeout ZIP | One-shot + delta | Phase 2 |
+| 📧 **Gmail** | ✅ **Live** (sync incremental) | `/v1/emails/sync` | À la demande | Phase 3a |
+| 📅 **Google Calendar** | ✅ **Live** (Day/3d/Week/Agenda views) | `/v1/calendar/sync` | À la demande | Phase 3b |
+| 📁 **Google Drive** | ✅ **Live** (folder nav 2-pass) | `/v1/drive/sync` | À la demande | Phase 3c |
+| 📸 **Google Photos** | ✅ **Live** (Picker + lightbox + map) | `/v1/photos/picker-*` | À la demande | Phase 3c |
+| ⚠️ Photos GPS | ❌ **Bloqué Google** (Picker strip GPS) | EXIF (sans GPS) | - | Phase 3c |
+| 👥 **Google Contacts** | ✅ **Live** (search multi-champs) | `/v1/contacts/sync` | À la demande | Phase 5 |
+| ✅ **Google Tasks** | ✅ **Live** (CRUD complet) | `/v1/tasks/*` | À la demande | Phase 5 |
+| 📺 **YouTube** | ✅ **Live** (activities/channels) | `/v1/youtube/sync` | À la demande | Phase 6 |
+| 💪 **Google Fit** (santé) | ✅ **Live** (19 metrics) | `/v1/health-data/sync` | À la demande | Phase 4 |
 | 🔐 Mots de passe Google | ✅ Code OK | Export CSV + scan HIBP local | Mensuel | Phase 4 |
 | 🛡️ HIBP scan masse mdp | ✅ **Live** | Client-side k-anonymity | À la demande | Phase 4 |
 | 🛡️ HIBP breach analysis | ✅ **Live** | Cross-ref domaines × HIBP /breaches | À la demande | Phase 4 |
@@ -28,17 +32,20 @@
 | 🛡️ Sherlock (username) | ✅ **Live** | `/v1/osint/sherlock` | À la demande | Phase 4 |
 | 🌐 DuckDNS | ✅ **Live** (`hubperso.duckdns.org`) | Task Scheduler 5min | Continuous | Phase 0 fin |
 | 💾 Restic backup OneDrive | ✅ **Live** | Task Scheduler daily 04h | Daily | Phase 0 fin |
-| 💪 Garmin Connect | 📋 À implémenter | garmin-connect-py | Quotidien | Phase 4+ |
+| 🐕 Watchdog hub-core | ✅ **Live** | `hub-core-watchdog.ps1` | Continuous (30s check) | Session #14 |
+| 💪 Garmin Connect | 📋 À implémenter | python-garminconnect | Quotidien | Phase 4+ |
+| 🎬 Streaming hub | 📋 À implémenter | Trakt.tv (Netflix/Prime/Disney+/Crunchyroll) | Auto | Phase 6 |
+| 🗑️ Loi 25 auto removal | 📋 À implémenter | Templates emails PIPEDA auto | À la demande | Module Suppression |
 | 📄 Documents PDF | 📋 À implémenter | Watch dossier | Continuous | Phase 5 |
-| 👥 Google Contacts (People) | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5 |
-| ✅ Google Tasks | 📋 OAuth prêt | OAuth API | Hebdo | Phase 5 |
-| 📺 YouTube historique | 📋 OAuth prêt | OAuth API | Hebdo | Phase 6 |
 | 🏃 Strava | 📋 À implémenter | OAuth | Auto | Phase 6 |
 | 🎵 Spotify | 📋 À implémenter | OAuth | Auto | Phase 6 |
-| 🚪 Cloudflare Tunnel | 📋 Code OK, attend setup chez Marc | start-tunnel.ps1 | Continuous | Phase 0 fin |
+| 🤖 CLIP semantic search photos | 📋 À implémenter | OpenCLIP local 600MB | Au sync | Phase 7+ |
+| 👤 Face recognition photos | 📋 À implémenter | dlib face_recognition | Au sync | Phase 7+ |
+| 🚪 Cloudflare Tunnel | ⏸️ Code OK, attend setup chez Marc | start-tunnel.ps1 | Continuous | Phase 0 fin |
 | 🚪 Port forwarding routeur | ⏸️ TODO chez Marc | Manuel | One-shot | Phase 0 fin |
+| 🐳 Docker Desktop | ⏸️ À installer chez Marc | winget | One-shot | Phase 0 fin |
 
-**Légende** : ✅ Live ou code-complete · 🔄 En cours · 📋 Code prêt mais inactif · ⏸️ Bloqué TODO externe
+**Légende** : ✅ Live ou code-complete · 🔄 En cours · 📋 Code prêt mais inactif · ⏸️ Bloqué TODO externe · ❌ Bloqué côté Google
 
 ---
 
@@ -355,3 +362,5 @@ OAuth Spotify : https://developer.spotify.com/dashboard
 | Date | Auteur | Changement |
 |---|---|---|
 | 2026-04-30 | Claude | Création initiale + state actuel + roadmap |
+| 2026-05-01 | Claude | Session #13 - Phase 3+4 ingest (Gmail + Calendar + Fit) |
+| 2026-05-04 | Claude | Session #14 - Phases 5/6 (Contacts/Tasks/YouTube) + Drive nav + Photos lightbox + Health 19 metrics + watchdog. GPS Photos confirmé bloqué côté Google. |
