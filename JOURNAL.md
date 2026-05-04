@@ -35,7 +35,7 @@
 - ✅ **Health** (Google Fit) : 19 metrics avec stratégies sum/avg/last (Phase 4)
 - ✅ **Sécurité** : HIBP password + breach analysis + Holehe + Sherlock (Phase 4)
 - ⏸️ **Localisation** : code-complete, attend Takeout JSON Marc
-- 📋 **Garmin Connect** (Phase 4+)
+- ✅ **Garmin Connect** (Phase 4+) : endpoints code-complete (`/v1/garmin/connect`, `/v1/garmin/sync`, `/v1/garmin/status`), garth tokens en DB chiffrés, 19 métriques — attend credentials Marc pour test live
 - 📋 **Streaming hub** (Trakt.tv pour Netflix/Prime/Disney+/Crunchyroll, Phase 6)
 - 📋 **Loi 25 auto removal** (PIPEDA emails)
 
@@ -44,14 +44,15 @@
 - ✅ Restic backup OneDrive (cron daily 04h)
 - ✅ Watchdog hub-core (auto-restart si crash)
 - ✅ Auto-migrate SQLite à chaque startup
+- ✅ **Cloudflare Tunnel quick** : `cloudflared tunnel --url localhost:3000` testé et fonctionnel sur mobile (URL temporaire `*.trycloudflare.com`)
 - ⏳ **Docker Desktop install** (chez Marc) → retour à Postgres+pgvector
-- ⏳ **Cloudflare Tunnel + port forwarding** (chez Marc)
+- 📋 **Cloudflare Tunnel permanent** (phase future) : nécessite domaine réel pour CNAME — DuckDNS ne supporte que les A records; pour l'instant tunnel quick suffit pour les tests
 
 **Prochaines actions concrètes (priorité) :**
 1. [ ] **Marc chez lui** : install Docker Desktop → retrouver les 470 transactions Desjardins en Postgres
-2. [ ] **Marc chez lui** : Cloudflare Tunnel + Access + DuckDNS live (Phase 0 fin)
-3. [ ] **Marc fournit Takeout** : Google Maps Timeline JSON → activer Phase 2 (parser code-complete)
-4. [ ] **Garmin Connect** : python-garminconnect, OAuth Garmin séparé (Phase 4+)
+2. [ ] **Marc fournit Takeout** : Google Maps Timeline JSON → activer Phase 2 (parser code-complete)
+3. [ ] **Garmin Connect test live** : `POST /v1/garmin/connect` avec credentials Marc → valider sync métriques
+4. [ ] **Cloudflare Tunnel permanent** (phase future) : nécessite vrai domaine (Cloudflare Registrar ou autre) pour CNAME
 5. [ ] **Streaming hub** : OAuth Trakt.tv → cross-ref Netflix/Disney+/Prime/Crunchyroll (Phase 6)
 6. [ ] **Loi 25 auto removal** : automatiser emails PIPEDA (Module Suppression D16)
 7. [ ] **CLIP semantic search** photos (Phase 7+, modèle 600MB local)
