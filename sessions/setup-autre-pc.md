@@ -316,6 +316,112 @@ Le LLM résout "et avant ?" automatiquement.
 
 ---
 
+## Annexe 4bis — 🔐 Transférer les secrets sur l'autre PC
+
+**Inventaire des secrets** (post-session #18, 2026-05-05) :
+
+| Fichier | Taille | Contenu | Critique ? |
+|---|---|---|---|
+| `hub-core/.env` | 1 KB | SECRET_KEY, OAuth client, Ollama URL, DATABASE_URL | OUI |
+| `hub-deploy/.env` | 1 KB | Postgres, Cloudflare tunnel, DuckDNS, OAuth | OUI |
+| `hub-frontend/.env.local` | 0.3 KB | Maps API, NEXT_PUBLIC_HUB_API_URL | OUI |
+| `hub-core/hub.db` | 101 MB | OAuth tokens chiffrés, 13k visites, 470 transactions, emails sync | TRÈS oui (perte = re-sync de tout) |
+| `age-key-BACKUP.enc` | 208 B | Backup chiffré clé age (master password requis) | OUI |
+| `~/.claude/.../memory/secrets_api_keys.md` | 4 KB | Index des credentials (Claude memory) | NON (peut être recréé manuellement) |
+
+### 🚚 Workflow recommandé : bundle chiffré AES-256
+
+Sur le PC **source** :
+
+```powershell
+# 1. Genere le bundle chiffre dans Downloads (te demande le master password)
+cd "G:\Mon disque\...\hub-deploy\scripts"
+.\bundle-secrets.ps1
+
+# Output : C:\Users\<user>\Downloads\hub-secrets-bundle.zip
+# - 7-Zip avec AES-256 + headers chiffres (-mhe)
+# - Sans password : impossible de voir les noms des fichiers
+# - Avec hub.db : ~30 MB compressé. Sans : <5 KB.
+```
+
+Transferer le `.zip` :
+- **USB** : recommandé (offline, pas de cloud).
+- **Bitwarden Send** : limit 500 MB, expiration 7j max, 5 downloads. Convient.
+- **Email à toi-même** : OK pour la version sans hub.db.
+- **JAMAIS** push ce zip sur GitHub ou git, même chiffré.
+
+Sur le PC **cible** :
+
+```powershell
+# 1. Clone tous les repos depuis GitHub
+mkdir C:\hub
+cd C:\hub
+git clone https://github.com/MoKarade/hub-core
+git clone https://github.com/MoKarade/hub-frontend
+git clone https://github.com/MoKarade/hub-deploy
+git clone https://github.com/MoKarade/hub-ingest
+git clone https://github.com/MoKarade/hub-docs
+
+# 2. Restaure les secrets (te demande le master password)
+.\hub-deploy\scripts\restore-secrets.ps1 -Bundle C:\Users\<user>\Downloads\hub-secrets-bundle.zip
+
+# Le script :
+# - Detecte la racine du hub
+# - Extract le zip dans un temp
+# - Backup les .env existants en .env.bak-YYYYMMDD-HHMMSS
+# - Restaure chaque fichier a sa place :
+#     * .env (auto-detect hub-core vs hub-deploy via contenu)
+#     * .env.local -> hub-frontend
+#     * hub.db -> hub-core
+#     * age-key-BACKUP.enc -> racine
+```
+
+### Si tu n'as pas 7-Zip
+
+```powershell
+winget install 7zip.7zip
+# Ou : https://7-zip.org/download.html
+```
+
+### Workflow alternative : password simple
+
+Si pas envie d'installer 7-Zip, copier les fichiers manuellement :
+
+```powershell
+# Copie via clé USB (pas de cloud, pas de email) :
+copy hub-core\.env       E:\transfer\
+copy hub-deploy\.env     E:\transfer\
+copy hub-frontend\.env.local E:\transfer\
+copy hub-core\hub.db     E:\transfer\
+
+# Sur l'autre PC, copie inverse a la bonne place
+```
+
+### Master password
+
+Documenté dans `~/.claude/.../memory/secrets_api_keys.md` côté Claude.
+Ne JAMAIS l'écrire dans le chat ou commiter en clair.
+
+### Ce que tu PERDS sans `hub.db`
+
+Si tu transfère uniquement les `.env` (pas la DB) :
+- ❌ Toutes les visites Phase 2 (13 646)
+- ❌ Toutes les activités (12 333)
+- ❌ Tous les points GPS (155 495)
+- ❌ Cache géocodage (`location_addresses`)
+- ❌ Tokens OAuth (faut re-OAuth Google)
+- ❌ Tokens Garmin chiffrés (faut re-connecter)
+- ❌ Emails synchronisés Gmail
+- ❌ Photos Picker imports
+- ❌ 470 transactions Desjardins
+- ❌ Calendar events synchro
+- ❌ YouTube/Health/Tasks sync
+- ❌ Lieux nommés + notes voyage
+
+Tout est **rejouable** depuis les sources brutes (`raw_events/` + `inbox/`) mais ça prendra des heures de re-sync. Le plus simple : transférer `hub.db` aussi.
+
+---
+
 ## Annexe 4 — Commandes utiles
 
 ```powershell
