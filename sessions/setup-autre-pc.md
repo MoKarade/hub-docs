@@ -329,31 +329,33 @@ Le LLM résout "et avant ?" automatiquement.
 | `age-key-BACKUP.enc` | 208 B | Backup chiffré clé age (master password requis) | OUI |
 | `~/.claude/.../memory/secrets_api_keys.md` | 4 KB | Index des credentials (Claude memory) | NON (peut être recréé manuellement) |
 
-### 🚚 Workflow recommandé : bundle chiffré AES-256
+### 🚚 Workflow ultra-simple : bundle chiffré + Drive sync
 
-Sur le PC **source** :
+Marc a Google Drive sur ses 2 PCs → on s'en sert comme bridge naturel.
+**Pas besoin de Gmail / USB / WeTransfer.**
+
+#### Sur le PC source
 
 ```powershell
-# 1. Genere le bundle chiffre dans Downloads (te demande le master password)
-cd "G:\Mon disque\...\hub-deploy\scripts"
-.\bundle-secrets.ps1
+# 1. Install 7-Zip si jamais fait (une seule fois)
+winget install 7zip.7zip
 
-# Output : C:\Users\<user>\Downloads\hub-secrets-bundle.zip
-# - 7-Zip avec AES-256 + headers chiffres (-mhe)
-# - Sans password : impossible de voir les noms des fichiers
-# - Avec hub.db : ~30 MB compressé. Sans : <5 KB.
+# 2. Lance le bundle (te demande le master password)
+cd "G:\Mon disque\PERSO & LOISIRS\AUTOMATISATION\Projets\Hub perso\hub-deploy\scripts"
+.\bundle-secrets.ps1
 ```
 
-Transferer le `.zip` :
-- **USB** : recommandé (offline, pas de cloud).
-- **Bitwarden Send** : limit 500 MB, expiration 7j max, 5 downloads. Convient.
-- **Email à toi-même** : OK pour la version sans hub.db.
-- **JAMAIS** push ce zip sur GitHub ou git, même chiffré.
+**Output** : `G:\Mon disque\...\_transfer\hub-secrets-bundle.7z`
+- Format `.7z` AES-256 + `-mhe=on` (header chiffré : sans password, on ne voit pas les noms)
+- Avec `hub.db` : ~30 MB. Sans : <5 KB.
+- Drive sync automatiquement vers l'autre PC en 5-30s.
+- Le dossier `_transfer/` est gitignored (pas de risque de push GitHub).
 
-Sur le PC **cible** :
+#### Sur le PC cible
+
+**1. Cloner tous les repos depuis GitHub** (5 repos):
 
 ```powershell
-# 1. Clone tous les repos depuis GitHub
 mkdir C:\hub
 cd C:\hub
 git clone https://github.com/MoKarade/hub-core
@@ -361,41 +363,81 @@ git clone https://github.com/MoKarade/hub-frontend
 git clone https://github.com/MoKarade/hub-deploy
 git clone https://github.com/MoKarade/hub-ingest
 git clone https://github.com/MoKarade/hub-docs
-
-# 2. Restaure les secrets (te demande le master password)
-.\hub-deploy\scripts\restore-secrets.ps1 -Bundle C:\Users\<user>\Downloads\hub-secrets-bundle.zip
-
-# Le script :
-# - Detecte la racine du hub
-# - Extract le zip dans un temp
-# - Backup les .env existants en .env.bak-YYYYMMDD-HHMMSS
-# - Restaure chaque fichier a sa place :
-#     * .env (auto-detect hub-core vs hub-deploy via contenu)
-#     * .env.local -> hub-frontend
-#     * hub.db -> hub-core
-#     * age-key-BACKUP.enc -> racine
 ```
 
-### Si tu n'as pas 7-Zip
+**2. Setup backend Python** :
 
 ```powershell
-winget install 7zip.7zip
-# Ou : https://7-zip.org/download.html
+cd C:\hub\hub-core
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
-### Workflow alternative : password simple
-
-Si pas envie d'installer 7-Zip, copier les fichiers manuellement :
+**3. Setup frontend Next.js** :
 
 ```powershell
-# Copie via clé USB (pas de cloud, pas de email) :
-copy hub-core\.env       E:\transfer\
-copy hub-deploy\.env     E:\transfer\
-copy hub-frontend\.env.local E:\transfer\
-copy hub-core\hub.db     E:\transfer\
-
-# Sur l'autre PC, copie inverse a la bonne place
+cd C:\hub\hub-frontend
+npm install      # ~2 min sur SSD local
+# .env.local sera restauré à l'étape suivante
 ```
+
+**4. Restaurer les secrets depuis Drive** :
+
+```powershell
+# Drive doit avoir synced le bundle avant cette étape
+winget install 7zip.7zip   # si jamais fait
+
+cd "G:\Mon disque\PERSO & LOISIRS\AUTOMATISATION\Projets\Hub perso\hub-deploy\scripts"
+
+# IMPORTANT : Unblock-File car Drive marque les fichiers comme "downloaded"
+Unblock-File .\restore-secrets.ps1
+Unblock-File .\bundle-secrets.ps1
+
+.\restore-secrets.ps1 -Bundle "G:\Mon disque\PERSO & LOISIRS\AUTOMATISATION\Projets\Hub perso\_transfer\hub-secrets-bundle.7z"
+```
+
+→ Te demande ton master password → décrypte → restaure :
+- `.env` → `C:\hub\hub-core\.env` + `C:\hub\hub-deploy\.env`
+- `.env.local` → `C:\hub\hub-frontend\.env.local`
+- `hub.db` → `C:\hub\hub-core\hub.db` (toutes tes données préservées)
+- `age-key-BACKUP.enc` → racine
+
+**5. Si tu transfères depuis Drive vers `C:\hub\` (split workflow recommandé)** :
+
+Le hub-frontend doit aussi être copié dans `C:\hub\hub-frontend\` (pas seulement le clone GitHub) car les `node_modules` doivent être sur disque local (Drive streaming = npm install bloqué).
+
+```powershell
+cd C:\hub\hub-frontend
+copy "G:\Mon disque\...\hub-frontend\.env.local" .env.local
+npm run dev   # Ready in 3.4s
+```
+
+**6. Lancer le backend** :
+
+```powershell
+cmd /c C:\hub\start-uvicorn.bat
+# Ou si C:\hub\start-uvicorn.bat n'existe pas (premier démarrage) :
+cd C:\hub\hub-core
+.venv\Scripts\python.exe -m uvicorn src.main:app --host 0.0.0.0 --port 8000
+```
+
+**7. Junction pour le pre-push hook** (validation CI locale avant git push) :
+
+```powershell
+cmd /c "mklink /J C:\HubFrontend C:\hub\hub-frontend"
+```
+
+### Si le script échoue
+
+| Erreur | Solution |
+|---|---|
+| `Le fichier ... n'est pas signé numériquement` | `Unblock-File .\bundle-secrets.ps1` puis relance |
+| `7zip non trouve` | `winget install 7zip.7zip` |
+| `Duplicate filename on disk: .env` | (déjà fixé en #18) → `git pull` dans hub-deploy |
+| `Param incorrect` (7z) | (déjà fixé) → `git pull` dans hub-deploy |
+| Bundle Drive pas encore synced | Attend 30s, vérifie l'icône Drive (vert = synced) |
 
 ### Master password
 
@@ -404,21 +446,34 @@ Ne JAMAIS l'écrire dans le chat ou commiter en clair.
 
 ### Ce que tu PERDS sans `hub.db`
 
-Si tu transfère uniquement les `.env` (pas la DB) :
-- ❌ Toutes les visites Phase 2 (13 646)
-- ❌ Toutes les activités (12 333)
-- ❌ Tous les points GPS (155 495)
-- ❌ Cache géocodage (`location_addresses`)
-- ❌ Tokens OAuth (faut re-OAuth Google)
-- ❌ Tokens Garmin chiffrés (faut re-connecter)
-- ❌ Emails synchronisés Gmail
-- ❌ Photos Picker imports
+Si tu transfères uniquement les `.env` (pas la DB) :
+- ❌ 13 646 visites + 12 333 activités + 155 495 points GPS Phase 2
+- ❌ Cache géocodage (`location_addresses`, ~3000 cellules)
+- ❌ OAuth tokens (re-OAuth Gmail/Photos/Calendar/Drive/Fit/People/Tasks/YouTube)
+- ❌ Tokens Garmin chiffrés (re-connecter)
+- ❌ Emails Gmail synchronisés
 - ❌ 470 transactions Desjardins
-- ❌ Calendar events synchro
-- ❌ YouTube/Health/Tasks sync
 - ❌ Lieux nommés + notes voyage
+- ❌ Insights / streaks / records calculés
 
-Tout est **rejouable** depuis les sources brutes (`raw_events/` + `inbox/`) mais ça prendra des heures de re-sync. Le plus simple : transférer `hub.db` aussi.
+Tout est **rejouable** depuis `raw_events/` + `inbox/`, mais ça prendra des heures de re-sync. **Le plus simple : transférer `hub.db` aussi** (le script te le demande).
+
+### Workflow alternative : copy direct (sans 7-Zip)
+
+Si tu n'as pas 7-Zip et pas envie d'installer :
+
+```powershell
+# Copie manuelle dans Drive
+mkdir "G:\Mon disque\...\_transfer\plain"
+copy hub-core\.env       "G:\Mon disque\...\_transfer\plain\hub-core.env"
+copy hub-deploy\.env     "G:\Mon disque\...\_transfer\plain\hub-deploy.env"
+copy hub-frontend\.env.local "G:\Mon disque\...\_transfer\plain\hub-frontend.env.local"
+copy hub-core\hub.db     "G:\Mon disque\...\_transfer\plain\hub.db"
+
+# Sur l'autre PC, copie inverse
+```
+
+⚠️ **Moins safe** : les .env contiennent des credentials en clair. Drive est privé mais si quelqu'un accède à ton compte Google, il les voit. Avec le bundle .7z chiffré, même Drive admin ne peut pas les lire.
 
 ---
 
