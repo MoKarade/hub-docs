@@ -10,6 +10,38 @@
 
 ## Plan en cours
 
+### Session #19 (2026-05-05, PC marcr Docker) — STANDARD MIGRATION + INSIGHTS LIVE
+
+**Contexte** : reprise du PC `marcr` (Docker stack) après ~10 jours sur l'autre PC (`dessin14` venv). État de départ : containers stoppés, secrets perdus, frontend jamais relancé.
+
+**Réalisé** :
+- ✅ Restauration complète secrets via `restore-secrets.ps1` + bundle 7z `_transfer/hub-secrets-bundle.7z` (Drive sync). Master pwd MarcoPolo833!
+- ✅ Stack Docker remontée : 3 containers healthy, 4 migrations Alembic appliquées (incluant fix conflit indexes oauth_tokens en doublon dans `93cf1ed7b005`)
+- ✅ Bind mount `inbox:ro` ajouté à hub-core pour `POST /v1/locations/ingest-file`
+- ✅ Import Timeline.json 75 MB en **41 secondes** : 13 663 visites + 160 926 points + 12 333 activités (format `semanticSegments_2024`)
+- ✅ Migration **SQLite → Postgres** via script `migrate_sqlite_to_pg.py` (à `C:\hub\scripts\`) : 25 000+ rows transférés (location_addresses 2927 cache geocoding, calendar_events 979, contacts 132, drive_files 15000, emails 172, health_metrics 2623, photos 1864, tasks 244, named_places 1, trip_notes 1, oauth_tokens 2). Cast bool/ARRAY/JSON automatique.
+- ✅ **Nouveau backend `/v1/insights`** : agrège 5 sources (locations + calendar + tasks + finance + emails). Tri par sévérité, résilient en cas d'erreur d'une source.
+- ✅ **Frontend `/insights` rewired** : remplace les `PREVIEW_INSIGHTS` hardcodés (violation règle 4 no-fake) par un fetch SWR live de `/v1/insights`. KPIs par sévérité, refresh manuel, skeleton, empty state, cards cliquables vers `action_url`.
+
+**Test live insights** : `Loin de chez toi 114j`, `5 abonnements potentiels ~108$/mois`, `Calendar 4h "Maison"`.
+
+**Mémoire projet** : nouveau fichier `~/.claude/projects/C--hub/memory/project_state.md` créé comme STANDARD COURANT. Plus jamais de raisonnement depuis l'ancien état Phase 0/1.
+
+**Commits** :
+- `hub-core@2fb41ba` — feat(insights): /v1/insights agrege multi-sources
+- `hub-frontend@f369f41` — feat(insights): page /insights wire sur live
+- `hub-deploy@4d1ac0c` — fix(compose): bind mount ../inbox:ro sur hub-core
+- `hub-core@89454a9` — fix(migration): retire indexes oauth_tokens en doublon
+- `hub-core@69f992b` — fix(oauth): index=True sur provider+service + migration corrective
+
+**Reste TODO court terme** :
+- Polish UI : skeleton states pendant geocode, photos lightbox keyboard navigation
+- Bugs B1-B4 audit (drive 404, apps 404, oauth alerte UI, OSINT clarification)
+- Cron job dans hub-ingest qui appelle `/v1/insights` quotidien + push ntfy si severité critical/warning
+- Garmin Connect : attente credentials Marc
+
+---
+
 ### Phase actuelle : **Phases 3-6 livrées + maintenance** (post Session #14)
 
 > Mise à jour 2026-05-04. Tout l'écosystème Google API est code-complete (Gmail, Calendar,
