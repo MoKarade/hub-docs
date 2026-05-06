@@ -1627,3 +1627,67 @@ Marc a fourni ses credentials Garmin → test live des endpoints code-complete d
 
 Les credentials Garmin n'ont jamais été loggées ni écrites dans un fichier. Le password a été passé en payload JSON direct au curl, jamais persisté. Les tokens garth retournés sont chiffrés via `encrypt_str()` avant insertion en DB.
 
+
+---
+
+## Session #22 — 2026-05-06 — Auto-sync Garmin + Health insights
+
+### Réalisé
+
+#### Scheduler auto-sync Garmin
+- Nouveau job `_job_garmin` dans `hub-core/src/scheduler.py`
+- Interval 6h (configurable `SCHEDULER_GARMIN_MINUTES` dans `.env`)
+- Skip silencieux si pas de tokens en DB (pas crash si Marc pas connecté)
+- Wired dans `start_scheduler` + `run_job_now` (admin endpoint)
+- Test live : 8 jobs schedulés en background (emails 15min, calendar/tasks/news 30min, health 1h, drive/garmin 6h, contacts 12h)
+
+#### Health insights — 8 detectors
+Nouveau `_health_insights()` dans `/v1/insights` qui agrège depuis `health_metrics` (Garmin + Google Fit) :
+
+| Detector | Trigger | Severity |
+|---|---|---|
+| Sommeil insuffisant | avg 7j sleep_total_min / 60 < 6h | warning |
+| Bon sommeil | avg 7j >= 7.5h | positive |
+| Stress élevé | avg 7j stress_avg > 50/100 | warning |
+| HRV en baisse | 7j vs 7j-1, drop >=15% | warning |
+| Pas en chute | 7j vs 7j-1, -25% | warning |
+| Pas en hausse | +25% | positive |
+| Recovery long | dernière mesure >=36h | info |
+| Fitness age vs best | écart >=5 ans | warning |
+| Fitness age = best | au record | positive |
+| Body battery min faible | avg 7j <20 | warning |
+| FC repos en hausse | 7j vs 30j, +5 bpm | warning |
+
+#### Test live
+```
+GET /v1/insights → total 11 (5 warnings + 6 info)
+[warning] health | Stress eleve : 54/100
+"Niveau de stress moyen de la semaine au-dessus du seuil (50). Prends une pause."
+```
+
+Le détecteur stress a fonctionné sur les vraies données Garmin de Marc (sync 90 jours) → insight valide poussé dans le système.
+
+#### Commit
+- `hub-core@d6ac48b` — feat(insights+scheduler): _health_insights (8 detectors) + auto-sync Garmin 6h
+
+### Système maintenant end-to-end
+
+```
+[Garmin Connect]
+      ↓ tokens chiffres en DB (oauth_tokens)
+[Scheduler] 6h sync auto -> 2245 datapoints health
+      ↓
+[/v1/insights] aggregation 6 sources (locations, calendar, tasks, finance, emails, health)
+      ↓ filtree par severity
+[hub-ingest scheduler] cron 8h00 daily
+      ↓
+[ntfy] -> push notification telephone Marc
+```
+
+Workflow complet : Marc reçoit chaque matin sur son tel les insights critical/warning détectés depuis ses données Garmin (sleep, stress, HRV, etc.) + autres sources (emails non-lus, taches en retard, voyages, etc.).
+
+### TODO restants
+
+- Marc configure `NTFY_TOPIC_URL` dans `.env` hub-ingest pour activer le push push
+- Frontend `/scheduler` : page admin pour voir l'état des jobs (backend `/v1/scheduler/status` existe déjà)
+
