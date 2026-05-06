@@ -10,6 +10,94 @@
 
 ## Plan en cours
 
+### Session #21 (2026-05-06 soir, PC dessin14) — TRAKT + CLIP + FACES + BROWSER + EXPORT + TESTS
+
+**Contexte** : Marc dit "fais 1.2.4" (CLIP / faces / tutoriels), puis "plus de mockup", puis "fais 3.4.5 et c'est quoi la suite, selon mon plan tout est fait?". Cette session pousse l'app au-dela du master plan original avec phase 7+ activee + nouveaux modules.
+
+**Realise** :
+
+- ✅ **Trakt.tv credentials live** : Marc fournit client_id + client_secret. Setup `.env` hub-core. Redirect URI corrige `/api/v1/streaming/oauth/callback` (passe par rewrite Next.js, pas direct sur :8000). En attente du clic OAuth Marc.
+
+- ✅ **CLIP semantic search photos (Phase 7+)** :
+  - Modele `PhotoEmbedding` (table photo_embeddings, vec 512-d JSON par photo)
+  - Migration `g3b4c5d6e7f8` (3 tables : photo_embeddings, face_clusters, photo_faces)
+  - Service `clip_embedder.py` lazy-loaded (ViT-B-32 / laion2b)
+  - Endpoints POST `/v1/photos/embed` + GET `/v1/photos/search` (cosine top-K)
+  - Job scheduler `_job_clip_embed` (skip silencieux si torch pas la, batch 100 chaque 30 min)
+  - Page frontend `/photos/search` avec score cosine en overlay + "Lancer batch 100"
+
+- ✅ **Face recognition Phase 7+** :
+  - Modeles `FaceCluster` + `PhotoFace` (encoding 128-d JSON, FK delayed via batch_alter_table SQLite)
+  - Service `face_detector.py` lazy-loaded (face_recognition / dlib HOG)
+  - Endpoints `/v1/photos/detect-faces`, `/v1/photos/cluster-faces` (DBSCAN reset preservant noms via centroid match), `/v1/photos/face-clusters` GET/PATCH, `/v1/photos/by-face/{cluster_id}`
+  - Job scheduler `_job_face_detect` (batch 50 chaque 60 min)
+  - Page frontend `/photos/faces` avec ClusterTile renommable inline
+
+- ✅ **pyproject.toml extras `[ml]`** : torch, open-clip-torch, face-recognition, scikit-learn, Pillow, numpy. Marc fait `pip install -e ".[ml]"` quand pret (~3 GB).
+
+- ✅ **Plus aucun mockup / fake data** :
+  - `/insights` page : retire `PREVIEW_INSIGHTS` (6 cards hardcodees), branche live `/v1/insights` (11 vrais insights via SWR)
+  - `InsightList` widget : retire placeholder "Phase 4+ pas encore implemente", branche live, top 4 par severite
+  - Dashboard widgets : retire badges "Phase 4+" / "Phase 5" + placeholder "En attente Takeout" / "disponible en Phase 5". Remplace par `LocationsMiniStats` (visites/lieux/maison live) + `HealthMiniStats` (pas/sommeil/RHR/body battery live)
+  - Empty states honnetes ("Tout est sous controle", "Aucune donnee santé encore")
+
+- ✅ **Hub data export Loi 25 self-applied** :
+  - Module `src/api/v1/export.py` avec `/v1/export/preview` + `/v1/export/all` (ZIP streame)
+  - 22 CSV par table + manifest.json + README.txt
+  - Tokens OAuth chiffres exclus par design
+  - Body emails inclus optionnellement (`?include_email_bodies=true`)
+  - Test live : 209 154 lignes en 10 sec, ZIP 17.5 MB
+  - Page `/settings → Exporter mes donnees` avec preview counts + toggle bodies
+
+- ✅ **Doc 08-rgpd.md + ADR-0008 + 3 tutoriels** :
+  - `08-rgpd.md` : cadre legal Loi 25 / PIPEDA / RGPD + workflow module privacy + categories sensibles
+  - ADR-0008 : justification "tracker manuel + cron de relance" vs automation 100%
+  - `tutorials/add-data-source.md` : pattern 5-etapes (modele + migration + endpoints + scheduler + page UI)
+  - `tutorials/deploy-app-version.md` : ship v2 d'app embarquee + retro-compat
+  - `tutorials/add-mobile-page.md` : guide mobile-first + anti-patterns + patterns reutilisables
+
+- ✅ **Browser history Chrome (Phase 6+ bonus)** :
+  - Modele `BrowserHistory` + migration `h4c5d6e7f8g9`
+  - Endpoints `/v1/browser/{sync,history,stats,wipe}` avec dedup_hash sha256
+  - Connecteur hub-ingest `chrome_history.py` lit SQLite Chrome lock-safe (shutil.copy2), JOIN urls+visits, convertit timestamps WebKit, decode transition bitmask, POST batch 500
+  - Cron 4x/jour Quebec (02h15/08h15/14h15/20h15)
+  - Page `/browser` avec heatmap heures + jours semaine + filtres domain/q/since_days
+
+- ✅ **Tests pytest etendus** : 27 nouveaux tests (privacy 7, export 4, browser 7, streaming 5, photos_ml 4). 78 → 105 tests, 100% pass.
+
+**Fix associe** : `_to_out` privacy ne gerait pas datetime naive SQLite (TypeError offset-naive vs offset-aware) → normalise en UTC avant comparaison.
+
+**Commits** :
+- `hub-core@e848e4e` — Phase 7+ CLIP + face recognition (3 modeles, 1 migration, 9 endpoints, 2 services lazy)
+- `hub-core@c8af660` — /v1/export/all ZIP complet du hub
+- `hub-core@fccebcb` — /v1/browser/* + 27 tests + fix privacy datetime naive
+- `hub-frontend@0411f8e` — fix(no-fake-data): retire mockups insights + dashboard widgets
+- `hub-frontend@2062e3a` — bouton "Telecharger mes donnees" dans /settings
+- `hub-frontend@dbe39e3` — page /browser + filtre type sur /streaming
+- `hub-frontend@6d5e377` — pages /photos/search + /photos/faces
+- `hub-ingest@7b24b22` — connecteur chrome_history (cron 6h)
+- `hub-docs@bb5dfc0` — 08-rgpd + ADR-0008 + tutorial add-data-source
+- `hub-docs@12a0ecf` — tutorials deploy-app-version + add-mobile-page
+
+**Etat global** : **TOUT le master plan original est fait** (Phases 0 a 7+). Bonus livres : streaming, browser, privacy tracker, export ZIP, PWA HTTPS stable, mobile UX, 105 tests.
+
+**Reste TODO court terme (actions Marc)** :
+- [ ] Cliquer "Connecter Trakt" sur https://hubperso.com/streaming + autoriser
+- [ ] `pip install -e ".[ml]"` dans hub-core pour activer CLIP + faces (gros ~3 GB, MSVC requis Windows)
+- [ ] Activer chrome_history dans .env hub-ingest
+- [ ] Migrer secrets hors Drive (`migrate-env-out-of-drive.ps1` existe)
+- [ ] Rotation 3 secrets exposes (DUCKDNS, Google OAuth, Restic)
+
+**Suggestions pour aller plus loin** :
+- Spotify connector (Phase 6 vision mentionnee)
+- Steam / Xbox gaming connectors
+- Voice IA (hub-chat dit "à venir")
+- App embarquees vraiment versionnees (vs tabs actuelles)
+- Cross-source insights LLM ("ton browsing baisse quand ton sommeil monte")
+- Auto-OCR PDFs raw_events (pdfplumber + tesseract)
+
+---
+
 ### Session #20 (2026-05-06, PC dessin14) — PWA NATIVE + MOBILE POLISH + LOI 25 TRACKER
 
 **Contexte** : Marc veut "une app entière sur le tel à télécharger" → PWA installable via HTTPS. Setup Cloudflare Tunnel quick mode, puis named tunnel sur domaine `hubperso.com` (acheté par Marc via Cloudflare Registrar). Puis polish mobile + finitions.
