@@ -1589,3 +1589,41 @@ Marc reçoit les notifs sur son tel (app ntfy + topic subscribed).
 - Garmin Connect : attente credentials Marc (manual step)
 - Marc doit configurer `NTFY_TOPIC_URL` quand il veut activer la prod
 - Dashboard /scheduler dans le frontend pour voir l'état des jobs (existe en backend `/v1/scheduler/status`)
+
+---
+
+## Session #21 (suite session #20) — 2026-05-06 — Garmin Connect activé
+
+### TODO entamé : credentials Garmin Connect
+
+Marc a fourni ses credentials Garmin → test live des endpoints code-complete depuis Phase 4+.
+
+### Réalisé
+
+- **POST /v1/garmin/connect** : `status='connected'` sans MFA. Tokens chiffrés sauvés dans `oauth_tokens` (provider='garmin', service='connect').
+- **POST /v1/garmin/sync** (days_back=90) :
+  - 12 metrics ingérées (nouveaux types pas encore en DB)
+  - 2 165 metrics updated (datapoints existants mis à jour)
+  - 86 jours processés
+  - 55,76 secondes
+- **GET /v1/garmin/status** : connected=true, last_sync_date=2026-05-06, total 2245 datapoints, 44 métriques disponibles.
+
+### Métriques Garmin maintenant en DB
+
+44 types : sleep (deep/light/rem/total/respiration max-min), steps, heart_rate (resting/min/max + 7day_avg), hrv_avg_ms, body_battery (charged/drained/min/max/end), stress (avg/max), calories (BMR + total), floors (steps + ascended/descended_m), distance_m, active/sedentary minutes, intensity (moderate/vigorous), race_time (5K/10K/half/marathon), endurance_score, cycling_ftp_w, training_readiness, recovery_time_h, fitness_age + fitness_age_best.
+
+### Sample stats (90 jours)
+
+- Distance moy : 1 673 m/jour (max 8 619 m)
+- Active minutes moy : 28 min/jour (max 139 min)
+- fitness_age_best : 18
+
+### Suite logique (non-bloquant)
+
+- Le scheduler `hub-core/src/scheduler.py` a déjà les jobs auto-sync configurés (Gmail/Calendar/Drive/Tasks/Health/News) mais Garmin n'est pas dedans. À ajouter pour sync automatique Garmin (suggestion : toutes les 6h).
+- L'endpoint `/v1/insights` agrège locations + calendar + tasks + finance + emails, **pas health**. Ajouter une source `_health_insights` qui détecte : sleep <6h plusieurs jours, stress élevé, recovery_time long, distance/steps en chute, etc.
+
+### Sécurité
+
+Les credentials Garmin n'ont jamais été loggées ni écrites dans un fichier. Le password a été passé en payload JSON direct au curl, jamais persisté. Les tokens garth retournés sont chiffrés via `encrypt_str()` avant insertion en DB.
+
