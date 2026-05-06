@@ -1531,3 +1531,61 @@ app/locations/page.tsx           (~1700 LOC, orchestrateur)
 **hub-core** : `4c1a77e` `4ec5c95` `77ff1d0` `0691c74` `af739e0` `7b82974` `0fae2ab` `3b54fb3`
 
 **hub-frontend** : `d5ed505` `be046ba` `0ef5332` `95920c1` `b7c63a5` `96a1849` `b0e2c65` `2e51a17` `786a783`
+
+---
+
+## Session #20 — 2026-05-06 — Cron insights_alerts (hub-ingest) + cleanup datetime
+
+### Contexte
+Reprise sur PC `dessin14` après pull du PC `marcr` (session #19 = migration SQLite→PG + insights backend). Objectif : finir le TODO restant "Cron job dans hub-ingest qui appelle /v1/insights quotidien + push ntfy si severité critical/warning".
+
+### Réalisé
+- **Connecteur `insights_alerts`** créé dans `hub-ingest/src/connectors/insights_alerts.py` :
+  - Poll GET /v1/insights (configurable via `HUB_API_BASE_URL`)
+  - Filtre par sévérité (`critical`, `warning` par défaut)
+  - Push ntfy avec emoji par sévérité (🚨/⚠️/ℹ️/✅) et priority mappée
+  - Body : description + delta + source
+  - **Dedup** via `insights_alerts_state.json` (hash sur source|title|severity, fenêtre 18h)
+  - **Raw event sourcing** : chaque poll dump dans `raw_events/insights_alerts/`
+  - Heartbeat ntfy urgent si le job lui-même plante
+
+- **Scheduler APScheduler** (`hub-ingest/src/main.py`) :
+  - Cron daily à 8h00 timezone `America/Toronto`
+  - Activable via `ENABLED_CONNECTORS=insights_alerts` dans `.env`
+  - Mode dédié `RUN_MODE=insights-alerts` pour test ad-hoc
+
+- **Fix `_aware()` helper** dans `hub-core/src/api/v1/insights.py` :
+  - 2 sources échouaient avec `TypeError: can't subtract offset-naive and offset-aware datetimes`
+  - SQLite renvoie naive, Postgres renvoie aware → helper applique tzinfo=UTC si naive
+  - Appliqué sur `ev.start_at` (calendar) + `last_home.start_time` (locations)
+
+- **Ruff cleanup** :
+  - 8 erreurs ruff fixées (F401 unused imports, F841 unused vars, N813 noqa, E501)
+  - Per-file-ignores E501 sur `ai.py` (DB schema SQL) + `photos.py` (SVG inline)
+  - 4 fichiers reformatés (ai.py, news.py, config.py, scheduler.py)
+
+### Test live
+```
+$ RUN_MODE=insights-alerts python -m src.main
+2026-05-06 08:45:33 [info] insights_fetched by_severity={'warning': 5, 'info': 5} total=10
+2026-05-06 08:45:33 [info] insight_alert_pushed severity=warning source=locations title='Loin de chez toi'
+2026-05-06 08:45:33 [info] insight_alert_pushed severity=warning source=emails title='21 email(s) non-lu(s)'
+... (5 alerts au total)
+2026-05-06 08:45:33 [info] insights_alerts_done new_alerts=5 skipped_dedup=0 skipped_severity=5
+
+# Re-run immédiat = dedup
+2026-05-06 08:45:48 [info] insights_alerts_done new_alerts=0 skipped_dedup=5 skipped_severity=5
+```
+
+### Configuration ntfy
+À configurer côté `.env` hub-ingest : `NTFY_TOPIC_URL=https://ntfy.sh/<topic-secret>`.
+Marc reçoit les notifs sur son tel (app ntfy + topic subscribed).
+
+### Commits
+- `hub-core@e09bcaa` — fix(insights+lint): _aware datetime + ruff config per-file-ignores
+- `hub-ingest@e7fafd2` — feat(scheduler): connecteur insights_alerts (poll /v1/insights -> ntfy)
+
+### TODO restants (non-bloquants)
+- Garmin Connect : attente credentials Marc (manual step)
+- Marc doit configurer `NTFY_TOPIC_URL` quand il veut activer la prod
+- Dashboard /scheduler dans le frontend pour voir l'état des jobs (existe en backend `/v1/scheduler/status`)
