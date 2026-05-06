@@ -10,6 +10,78 @@
 
 ## Plan en cours
 
+### Session #20 (2026-05-06, PC dessin14) — PWA NATIVE + MOBILE POLISH + LOI 25 TRACKER
+
+**Contexte** : Marc veut "une app entière sur le tel à télécharger" → PWA installable via HTTPS. Setup Cloudflare Tunnel quick mode, puis named tunnel sur domaine `hubperso.com` (acheté par Marc via Cloudflare Registrar). Puis polish mobile + finitions.
+
+**Réalisé** :
+
+- ✅ **Notifications natives PWA** (remplace ntfy.sh) :
+  - Backend `hub-core/src/api/v1/notifications.py` — VAPID + pywebpush + soft-delete sur 404/410
+  - Modèle `PushSubscription` + migration `d4f7e9a2c5b1`
+  - Frontend `components/enable-notifications.tsx` + service worker `public/sw.js`
+  - Fix encoding RFC 2047 sur titres avec emoji (`hub-ingest/src/core/notify.py`)
+  - Digest unique au lieu de N notifs (regroupement insights par jour)
+
+- ✅ **HTTPS public stable** :
+  - Cloudflare Named Tunnel `22f83621-2357-44d0-b56e-ffbc088fa106`
+  - Routes DNS `hubperso.com` + `www.hubperso.com` → tunnel
+  - Config `~/.cloudflared/config.yml` ingress vers `localhost:3000`
+  - PWA installable depuis `https://hubperso.com` sur tel
+
+- ✅ **Mobile UX polish** (Marc : "boutons trop petits, compliqué de se déplacer") :
+  - `components/mobile-bottom-nav.tsx` : 5 raccourcis 56px touch + safe-area iOS
+  - `globals.css` : règles `@media (max-width: 1023px)` — buttons text-xs ≥40px, inputs ≥40px + font-size 16px (anti-zoom iOS), tap-highlight accent vert
+  - `layout.tsx` : `pb-[60px] lg:pb-0` body padding pour ne pas cacher contenu
+  - Pages polishées : `locations` (stats grid 2 cols mobile, filtres flex-col, pagination 44px), `finances` (tables overflow-x-auto + colonnes cachées md/lg + truncate descriptions), `insights` (KPI 2 cols mobile), `health` (hero tiles truncate, sync btns flex-wrap), `calendar` (toolbar flex-col mobile, nav 40px, view modes scrollables)
+
+- ✅ **Sprint B — SSE realtime étendu** :
+  - `dashboard-grid.tsx` : pulse sur `new_location` / `timeline_ingested` (widget locations) + `insight_generated` / `stats_update` (widget insights)
+  - Petit dot SSE status (vert/connecté, jaune pulse/connecting, gris/disconnected) en haut à droite du KPI strip
+  - Backend `emails.py` : `broadcast("emails_synced", ...)` après sync
+
+- ✅ **Module Loi 25 / PIPEDA / RGPD removal tracker** (chantier C de la roadmap, point #6 priorités) :
+  - Modèle `RemovalRequest` + migration `e1f2a3b4c5d6_add_removal_requests.py`
+  - Endpoints `/v1/privacy/*` : POST/GET/PATCH/DELETE requêtes + GET `/summary` + GET `/templates`
+  - Génération auto email FR depuis `legal_basis` (loi25/pipeda/gdpr) × `request_type` (access/deletion/rectification) avec spécifiques légaux 30j deadline
+  - Status workflow : `draft` → `sent` → `acknowledged` / `data_deleted` / `refused` / `expired`. Calcul auto `deadline_at = sent_at + 30j`
+  - Frontend `components/privacy-osint.tsx` : remplace template statique copy/paste par tracker complet (5 dots summary, formulaire nouvelle demande, liste avec status badges + actions, preview email + copier)
+
+- ✅ **Cron `privacy_reminders`** dans hub-ingest :
+  - Connecteur `connectors/privacy_reminders.py` poll `/v1/privacy/requests?status_filter=sent` daily 9h Quebec
+  - Push relance Web Push aux jours-clés J-7, J-3, J-1, échéance, J+1, J+3, J+7
+  - Dedup via state file `privacy_reminders_state.json`
+  - Wired dans `main.py` scheduler + mode test `RUN_MODE=privacy-reminders`
+
+- ✅ **Adresse HOME corrigée** : `1548 avenue de la roseliere quebec` → géocodé Nominatim 46.8213°/-71.2871° → `POST /v1/locations/retag` radius 1000m → 15 visites tagged HOME
+
+- ✅ **Garmin Connect activé** : credentials Marc renseignés, `_job_garmin` ajouté au scheduler hub-core, scheduler_garmin_minutes=360, skip silencieux si pas de tokens
+
+- ✅ **8 détecteurs santé** ajoutés à `/v1/insights` : sleep, stress, HRV, steps, recovery, fitness_age, body_battery, RHR
+
+**Commits** :
+- `hub-core@43346a8` — feat(notifications): Web Push PWA natif (remplace ntfy.sh)
+- `hub-core@fe0a571` — feat(privacy): module Loi 25 / PIPEDA / RGPD removal tracker + broadcast emails_synced
+- `hub-frontend@6813065` — feat(mobile): bottom nav bar + touch targets >=40px + safe-area iOS
+- `hub-frontend@aa03011` — feat(ui): mobile polish + SSE pulses + Loi 25 tracker
+- `hub-ingest@(en cours)` — feat(privacy): cron privacy_reminders daily 9h Quebec
+
+**Test live** :
+- PWA installée sur tel via `https://hubperso.com` (URL stable, plus de quick tunnel)
+- Notifs Web Push reçues (test bouton "Tester" depuis settings → notif système OK)
+- Bottom nav 5 onglets fonctionnel
+- `/v1/privacy/summary` répond `{"total":0,"draft":0,"sent":0,"overdue":0,"resolved":0,"refused":0}` — tracker prêt à l'usage
+
+**Reste TODO court terme** :
+- [ ] Marc teste mobile UX et reporte si pages spécifiques ont encore des touch targets trop petits
+- [ ] Démarrer hub-ingest avec `ENABLED_CONNECTORS=insights_alerts,privacy_reminders` (.env à mettre à jour)
+- [ ] Streaming hub Trakt.tv (Phase 6 point #5)
+- [ ] CLIP semantic photos + face recognition (Phase 7+)
+- [ ] Tutoriels `hub-docs/tutorials/`
+- [ ] ADRs 0008+ (CLIP, face recog, etc.)
+
+---
+
 ### Session #19 (2026-05-05, PC marcr Docker) — STANDARD MIGRATION + INSIGHTS LIVE
 
 **Contexte** : reprise du PC `marcr` (Docker stack) après ~10 jours sur l'autre PC (`dessin14` venv). État de départ : containers stoppés, secrets perdus, frontend jamais relancé.
