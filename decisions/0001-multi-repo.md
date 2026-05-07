@@ -1,7 +1,7 @@
 # ADR-0001 — Multi-repo
 
 **Date :** 2026-04-28
-**Statut :** Acceptée
+**Statut :** Superseded by 0009
 **Décideurs :** Marc, Claude
 
 ## Contexte

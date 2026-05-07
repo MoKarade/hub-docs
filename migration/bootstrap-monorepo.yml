@@ -1,0 +1,128 @@
+# À copier-coller dans le NOUVEAU repo MoKarade/hub, à l'emplacement :
+#   .github/workflows/bootstrap-monorepo.yml
+#
+# NE PAS placer ce fichier dans .github/workflows/ de hub-docs : il s'enregistrerait
+# sur le mauvais repo et tenterait d'importer hub-docs dans lui-même.
+#
+# Prérequis avant déclenchement :
+#   1. MoKarade/hub a été créé sur GitHub avec README initial (donc branche main existe).
+#   2. Branch protection désactivée sur main (sinon le push final échoue).
+#   3. Aucun des dossiers cibles (hub-core/, docs/, etc.) n'existe déjà dans le repo.
+#   4. Secret SOURCE_PAT configuré (Settings → Secrets and variables → Actions) :
+#      - Fine-grained PAT, owner = MoKarade
+#      - Repository access : sélectionner les repos sources
+#      - Permissions : Contents = Read
+#      Le PAT marche aussi pour les repos publics, donc on l'utilise toujours.
+
+name: Bootstrap monorepo
+
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: 'JSON array de {repo,prefix,branch} — défaut = 5 repos actuels de MoKarade'
+        required: true
+        default: '[{"repo":"MoKarade/hub-core","prefix":"hub-core","branch":"main"},{"repo":"MoKarade/hub-frontend","prefix":"hub-frontend","branch":"main"},{"repo":"MoKarade/hub-ingest","prefix":"hub-ingest","branch":"main"},{"repo":"MoKarade/hub-deploy","prefix":"hub-deploy","branch":"main"},{"repo":"MoKarade/hub-docs","prefix":"docs","branch":"main"}]'
+      squash:
+        description: "Squash chaque import en un seul commit (recommandé)"
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout monorepo"
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier qu'aucun prefix cible n'existe déjà
+        env:
+          REPOS_JSON: ${{ inputs.repos }}
+        run: |
+          set -euo pipefail
+          CONFLICT=0
+          while read -r prefix; do
+            if [ -e "$prefix" ]; then
+              echo "::error::Le prefix '$prefix' existe déjà dans le repo (fichier ou dossier). Supprime-le ou choisis un autre prefix."
+              CONFLICT=1
+            fi
+          done < <(echo "$REPOS_JSON" | jq -r '.[].prefix')
+          if [ "$CONFLICT" -eq 1 ]; then
+            echo "Si un import précédent a partiellement réussi, le plus simple est de supprimer le repo et de le recréer."
+            exit 1
+          fi
+
+      - name: Configurer git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Valider le JSON d'entrée
+        run: |
+          set -euo pipefail
+          echo '${{ inputs.repos }}' | jq -e 'type == "array" and length > 0' >/dev/null \
+            || { echo "::error::inputs.repos doit être un JSON array non vide"; exit 1; }
+          echo '${{ inputs.repos }}' | jq -e 'all(.repo and .prefix and .branch)' >/dev/null \
+            || { echo "::error::Chaque entrée doit avoir repo, prefix, branch"; exit 1; }
+
+      - name: Vérifier que SOURCE_PAT est configuré
+        env:
+          SOURCE_PAT: ${{ secrets.SOURCE_PAT }}
+        run: |
+          if [ -z "${SOURCE_PAT:-}" ]; then
+            echo "::error::Le secret SOURCE_PAT n'est pas configuré. Settings → Secrets and variables → Actions → New repository secret. Cf. en-tête du fichier."
+            exit 1
+          fi
+
+      - name: Importer chaque repo via git subtree
+        env:
+          REPOS_JSON: ${{ inputs.repos }}
+          SQUASH: ${{ inputs.squash }}
+          SOURCE_PAT: ${{ secrets.SOURCE_PAT }}
+        run: |
+          set -euo pipefail
+
+          SQUASH_FLAG=""
+          if [ "$SQUASH" = "true" ]; then
+            SQUASH_FLAG="--squash"
+          fi
+
+          echo "$REPOS_JSON" | jq -c '.[]' | while read -r item; do
+            REPO=$(echo   "$item" | jq -r '.repo')
+            PREFIX=$(echo "$item" | jq -r '.prefix')
+            BRANCH=$(echo "$item" | jq -r '.branch')
+
+            echo "::group::Import $REPO ($BRANCH) -> $PREFIX"
+
+            URL="https://x-access-token:${SOURCE_PAT}@github.com/${REPO}.git"
+
+            git subtree add --prefix="$PREFIX" "$URL" "$BRANCH" $SQUASH_FLAG \
+              -m "import: $REPO@$BRANCH -> $PREFIX (squash=$SQUASH)"
+
+            # Tag traçant l'origine de l'import (1 tag par sous-arbre).
+            TAG="import/$(echo "$PREFIX" | tr '/' '-')-$(date +%Y%m%d)"
+            git tag -a "$TAG" -m "Imported from $REPO@$BRANCH on $(date -u +%FT%TZ)"
+
+            echo "::endgroup::"
+          done
+
+      - name: Pousser commits + tags
+        run: |
+          git push origin HEAD:main
+          git push origin --tags
+
+      - name: Récap
+        run: |
+          echo "## Imports effectués" >> "$GITHUB_STEP_SUMMARY"
+          echo '${{ inputs.repos }}' | jq -r '.[] | "- `\(.repo)@\(.branch)` -> `\(.prefix)`"' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tags créés : voir \`git tag -l 'import/*'\`" >> "$GITHUB_STEP_SUMMARY"
