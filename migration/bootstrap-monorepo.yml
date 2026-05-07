@@ -6,9 +6,13 @@
 #
 # Prérequis avant déclenchement :
 #   1. MoKarade/hub a été créé sur GitHub avec README initial (donc branche main existe).
-#   2. Aucun autre commit n'a été fait sur main (le workflow ajoute des commits dessus).
-#   3. Branch protection désactivée sur main (sinon le push final échoue).
-#   4. Tous les repos sources sont publics (sinon ajouter un PAT, voir bloc commenté).
+#   2. Branch protection désactivée sur main (sinon le push final échoue).
+#   3. Aucun des dossiers cibles (hub-core/, docs/, etc.) n'existe déjà dans le repo.
+#   4. Secret SOURCE_PAT configuré (Settings → Secrets and variables → Actions) :
+#      - Fine-grained PAT, owner = MoKarade
+#      - Repository access : sélectionner les repos sources
+#      - Permissions : Contents = Read
+#      Le PAT marche aussi pour les repos publics, donc on l'utilise toujours.
 
 name: Bootstrap monorepo
 
@@ -16,21 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       repos:
-        description: |
-          JSON array. Chaque entrée :
-            { "repo": "MoKarade/<nom>", "prefix": "<dossier-cible>", "branch": "main" }
-          Exemple complet (à AJUSTER selon les noms réels avant de cliquer Run) :
-          [
-            {"repo":"MoKarade/hub-core",     "prefix":"hub-core",     "branch":"main"},
-            {"repo":"MoKarade/hub-frontend", "prefix":"hub-frontend", "branch":"main"},
-            {"repo":"MoKarade/hub-ingest",   "prefix":"hub-ingest",   "branch":"main"},
-            {"repo":"MoKarade/hub-deploy",   "prefix":"hub-deploy",   "branch":"main"},
-            {"repo":"MoKarade/hub-docs",     "prefix":"docs",         "branch":"main"},
-            {"repo":"MoKarade/app-trajets",  "prefix":"apps/trajets", "branch":"main"},
-            {"repo":"MoKarade/app-finance",  "prefix":"apps/finance", "branch":"main"}
-          ]
+        description: 'JSON array de {repo,prefix,branch} — défaut = 5 repos actuels de MoKarade'
         required: true
-        default: '[]'
+        default: '[{"repo":"MoKarade/hub-core","prefix":"hub-core","branch":"main"},{"repo":"MoKarade/hub-frontend","prefix":"hub-frontend","branch":"main"},{"repo":"MoKarade/hub-ingest","prefix":"hub-ingest","branch":"main"},{"repo":"MoKarade/hub-deploy","prefix":"hub-deploy","branch":"main"},{"repo":"MoKarade/hub-docs","prefix":"docs","branch":"main"}]'
       squash:
         description: "Squash chaque import en un seul commit (recommandé)"
         required: true
@@ -82,13 +74,20 @@ jobs:
           echo '${{ inputs.repos }}' | jq -e 'all(.repo and .prefix and .branch)' >/dev/null \
             || { echo "::error::Chaque entrée doit avoir repo, prefix, branch"; exit 1; }
 
+      - name: Vérifier que SOURCE_PAT est configuré
+        env:
+          SOURCE_PAT: ${{ secrets.SOURCE_PAT }}
+        run: |
+          if [ -z "${SOURCE_PAT:-}" ]; then
+            echo "::error::Le secret SOURCE_PAT n'est pas configuré. Settings → Secrets and variables → Actions → New repository secret. Cf. en-tête du fichier."
+            exit 1
+          fi
+
       - name: Importer chaque repo via git subtree
         env:
           REPOS_JSON: ${{ inputs.repos }}
           SQUASH: ${{ inputs.squash }}
-          # Pour repos privés, décommenter et configurer un secret SOURCE_PAT
-          # avec scope Contents:Read sur les repos sources :
-          # SOURCE_PAT: ${{ secrets.SOURCE_PAT }}
+          SOURCE_PAT: ${{ secrets.SOURCE_PAT }}
         run: |
           set -euo pipefail
 
@@ -104,9 +103,7 @@ jobs:
 
             echo "::group::Import $REPO ($BRANCH) -> $PREFIX"
 
-            # URL anonyme (repos publics). Pour privés : remplacer par
-            # https://x-access-token:${SOURCE_PAT}@github.com/${REPO}.git
-            URL="https://github.com/${REPO}.git"
+            URL="https://x-access-token:${SOURCE_PAT}@github.com/${REPO}.git"
 
             git subtree add --prefix="$PREFIX" "$URL" "$BRANCH" $SQUASH_FLAG \
               -m "import: $REPO@$BRANCH -> $PREFIX (squash=$SQUASH)"
