@@ -1,7 +1,7 @@
 # ADR-0009 — Bascule en monorepo
 
 **Date :** 2026-05-07
-**Statut :** Proposée (en attente d'exécution de la migration)
+**Statut :** Acceptée — 2026-05-07
 **Décideurs :** Marc, Claude
 **Supersede (si acceptée) :** ADR-0001
 
