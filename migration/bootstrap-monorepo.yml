@@ -47,19 +47,25 @@ jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
-      - name: "Checkout monorepo (état initial : README seul)"
-        uses: actions/checkout@v4
+      - name: "Checkout monorepo"
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Vérifier que le repo est encore vierge
+      - name: Vérifier qu'aucun prefix cible n'existe déjà
+        env:
+          REPOS_JSON: ${{ inputs.repos }}
         run: |
           set -euo pipefail
-          # On accepte uniquement 1 commit (l'init README) sur main.
-          COMMITS=$(git rev-list --count HEAD)
-          if [ "$COMMITS" -gt 1 ]; then
-            echo "::error::Le repo a déjà $COMMITS commits. Le bootstrap doit tourner sur un repo neuf (1 commit init)."
-            echo "Si tu veux ré-importer après un échec, supprime le repo et recrée-le."
+          CONFLICT=0
+          while read -r prefix; do
+            if [ -e "$prefix" ]; then
+              echo "::error::Le prefix '$prefix' existe déjà dans le repo (fichier ou dossier). Supprime-le ou choisis un autre prefix."
+              CONFLICT=1
+            fi
+          done < <(echo "$REPOS_JSON" | jq -r '.[].prefix')
+          if [ "$CONFLICT" -eq 1 ]; then
+            echo "Si un import précédent a partiellement réussi, le plus simple est de supprimer le repo et de le recréer."
             exit 1
           fi
 
