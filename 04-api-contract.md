@@ -1,5 +1,10 @@
 # 04 — Contrat d'API
 
+> ⚠️ **Document partiel (rédigé 2026-04-29 pour Phase 0/1).** Liste 19 routes
+> sur les **146** que le hub expose aujourd'hui en Phase 6+. Pour la liste
+> exhaustive et à jour : `http://localhost:8000/docs` (Swagger auto-généré)
+> ou `../../10_etat_reel.md`.
+
 > Documentation manuelle, **complémentaire** de la doc OpenAPI auto-générée à `http://localhost:8000/docs`. Cette page documente les **invariants métier** et les **garanties** que la doc machine ne peut pas exprimer.
 
 ## Conventions générales

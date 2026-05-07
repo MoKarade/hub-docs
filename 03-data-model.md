@@ -1,5 +1,9 @@
 # 03 — Modèle de données
 
+> ⚠️ **Document de design original (Phase 2, 2026-04-29).** Pour le schéma
+> actuel exhaustif, voir **`../../10_etat_reel.md`** section "31 tables".
+> On est passé de 6 tables (Phase 2) à **31 tables** (Phase 6+).
+
 ## Vue d'ensemble
 
 À fin Phase 2, le hub a **6 tables principales** :

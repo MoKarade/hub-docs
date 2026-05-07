@@ -1,5 +1,11 @@
 # 02 — Architecture du Personal Data Hub
 
+> ⚠️ **Document de design original (2026-04-29).** Pour la liste exhaustive
+> des tables et endpoints actuels, voir **`../../10_etat_reel.md`**.
+> Etat live : **31 tables, 146 routes, 12 jobs auto-sync** (vs les "5-6 tables
+> Phase 0" mentionnées plus bas). Le diagramme mermaid Vue d'ensemble reste
+> conceptuellement valide.
+
 ## Vue d'ensemble (mermaid)
 
 ```mermaid
