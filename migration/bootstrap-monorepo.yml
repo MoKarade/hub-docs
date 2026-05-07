@@ -47,7 +47,7 @@ jobs:
   bootstrap:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout monorepo (état initial : README seul)
+      - name: "Checkout monorepo (état initial : README seul)"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
